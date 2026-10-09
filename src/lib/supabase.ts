@@ -94,3 +94,13 @@ export async function getMyBookings() {
   if (!supabase) return { data: [], error: null }
   return supabase.from('bookings').select('id, booking_number, status, payment_status, city, district, address_text, scheduled_date, scheduled_slot, price_snapshot, created_at, services(name_ar, slug)').order('created_at', { ascending: false }).limit(50)
 }
+
+export async function startPayment(bookingId: string) {
+  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  const { data: payment, error: paymentError } = await supabase.rpc('prepare_payment', { p_booking_id: bookingId })
+  if (paymentError) throw new Error(paymentError.message || 'الخدمة لم تصبح جاهزة للدفع بعد')
+  const { data, error } = await supabase.functions.invoke('create-checkout-session', { body: { payment_id: payment.id } })
+  if (error || !data?.url) throw new Error(data?.message || 'بوابة الدفع غير مهيأة بعد. أضف مفاتيح مزود الدفع من إعدادات Supabase.')
+  window.open(data.url, '_blank', 'noopener,noreferrer')
+  return data.url as string
+}
