@@ -451,3 +451,79 @@ revoke insert, update, delete on public.bookings from anon, authenticated;
 revoke insert, update, delete on public.booking_status_history from anon, authenticated;
 revoke insert, update, delete on public.payments from anon, authenticated;
 revoke insert, update, delete on public.audit_logs from anon, authenticated;
+
+
+-- Auth: إنشاء الملف الأساسي دائمًا، وفتح ملف فني بطلب اعتماد فقط؛ لا تُرفع صلاحية المستخدم ذاتيًا.
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, full_name, phone)
+  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', ''), nullif(new.raw_user_meta_data->>'phone', ''))
+  on conflict (id) do update set full_name = excluded.full_name, phone = excluded.phone, updated_at = now();
+  insert into public.user_roles (user_id, role) values (new.id, 'customer') on conflict (user_id) do nothing;
+  if new.raw_user_meta_data->>'requested_role' = 'provider' then
+    insert into public.provider_profiles (user_id, professional_bio, approval_status)
+    values (new.id, nullif(new.raw_user_meta_data->>'professional_bio', ''), 'pending')
+    on conflict (user_id) do nothing;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.confirm_booking_completion(p_booking_id uuid, p_note text default null)
+returns public.bookings language plpgsql security definer set search_path = public
+as $$
+declare current_booking public.bookings; changed public.bookings;
+begin
+  select * into current_booking from public.bookings where id = p_booking_id for update;
+  if current_booking.id is null then raise exception 'booking_not_found'; end if;
+  if not (public.is_admin() or current_booking.provider_id = auth.uid()) then raise exception 'provider_required'; end if;
+  if current_booking.status not in ('assigned','on_the_way','arrived','in_progress') then raise exception 'invalid_completion_transition'; end if;
+  update public.bookings set status = 'completed', updated_at = now() where id = p_booking_id returning * into changed;
+  insert into public.booking_status_history (booking_id, from_status, to_status, changed_by, note) values (p_booking_id, current_booking.status, 'completed', auth.uid(), coalesce(nullif(trim(p_note), ''), 'أكد الفني انتهاء المهمة'));
+  if not exists (select 1 from public.payments where booking_id = p_booking_id and status not in ('failed','refunded')) then
+    insert into public.payments (booking_id, provider, amount, status, idempotency_key)
+    values (p_booking_id, 'stripe', coalesce(current_booking.price_snapshot, 0), 'unpaid', 'booking:' || p_booking_id::text);
+  end if;
+  return changed;
+end;
+$$;
+revoke all on function public.confirm_booking_completion(uuid, text) from public;
+grant execute on function public.confirm_booking_completion(uuid, text) to authenticated;
+
+create or replace function public.prepare_payment(p_booking_id uuid)
+returns public.payments language plpgsql security definer set search_path = public
+as $$
+declare current_booking public.bookings; prepared public.payments;
+begin
+  select * into current_booking from public.bookings where id = p_booking_id and customer_id = auth.uid() for update;
+  if current_booking.id is null then raise exception 'booking_not_found'; end if;
+  if current_booking.status <> 'completed' then raise exception 'service_not_completed'; end if;
+  if current_booking.price_snapshot is null or current_booking.price_snapshot <= 0 then raise exception 'price_not_set'; end if;
+  insert into public.payments (booking_id, provider, amount, status, idempotency_key)
+  values (p_booking_id, 'stripe', current_booking.price_snapshot, 'pending', 'booking:' || p_booking_id::text)
+  on conflict (idempotency_key) do update set amount = excluded.amount
+  returning * into prepared;
+  update public.bookings set payment_status = 'pending', updated_at = now() where id = p_booking_id;
+  return prepared;
+end;
+$$;
+revoke all on function public.prepare_payment(uuid) from public;
+grant execute on function public.prepare_payment(uuid) to authenticated;
+
+-- يستعمله webhook موثوق فقط بعد التحقق من توقيع مزود الدفع؛ لا يُستدعى من المتصفح.
+create or replace function public.settle_payment(p_external_reference text, p_payment_intent_id text default null)
+returns public.payments language plpgsql security definer set search_path = public
+as $$
+declare paid public.payments;
+begin
+  update public.payments set status = 'paid', external_reference = coalesce(p_payment_intent_id, p_external_reference), settled_at = now()
+  where id::text = p_external_reference or external_reference = p_external_reference
+  returning * into paid;
+  if paid.id is null then raise exception 'payment_not_found'; end if;
+  update public.bookings set payment_status = 'paid', updated_at = now() where id = paid.booking_id;
+  return paid;
+end;
+$$;
+revoke all on function public.settle_payment(text, text) from public;
+grant execute on function public.settle_payment(text, text) to service_role;
