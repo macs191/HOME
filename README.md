@@ -1,6 +1,6 @@
 # HOME SERVICE
 
-منصة عربية RTL لحجز الخدمات المنزلية، مبنية بـ React وVite وTypeScript، مع واجهة وطبقة بيانات جاهزة لـ Supabase PostgreSQL/Auth/Storage/Realtime. عند غياب إعدادات Supabase يعمل الكتالوج والحجز في وضع معاينة صريح؛ وعند توفرها يحاول زر التأكيد استخدام RPC آمن باسم `create_booking` بعد تحويل slug الخدمة إلى UUID من قاعدة البيانات. لا تعرض الواجهة بيانات إنتاج لمجرد وجود المفاتيح، وتظهر الحالات الفارغة عندما لا توجد قراءة مؤكدة.
+منصة عربية RTL لحجز الخدمات المنزلية، مبنية بـ React وVite وTypeScript، ومرتبطة بمشروع Supabase فعلي لـ PostgreSQL/Auth/Storage/Realtime. التسجيل متاح للعميل والفني، ويُفتح ملف الفني بحالة `pending` ولا تُرفع الصلاحيات من الواجهة. الحجز يستخدم RPC آمن باسم `create_booking`، ومساحة العميل تقرأ الطلبات الحقيقية وتعرض الدفع بعد تأكيد إكمال المهمة.
 
 ## التشغيل المحلي
 
@@ -29,11 +29,10 @@ VITE_SUPABASE_ANON_KEY=YOUR_ANON_KEY
 
 ## إعداد Supabase
 
-1. أنشئ مشروعًا جديدًا في Supabase.
-2. افتح SQL Editor وطبّق `supabase/migrations/20261010000000_initial_schema.sql`.
-3. راجع أسماء المدن، سياسة الاحتفاظ بالبيانات، وسياسات Storage قبل الإنتاج.
-4. فعّل Email Auth أو مزود تسجيل الدخول المطلوب من Authentication.
-5. لا تجعل إنشاء دور `admin` متاحًا من الواجهة. امنح أول مدير عبر SQL آمن بعد تسجيل حسابه ومراجعة معرّف المستخدم:
+1. المشروع المرتبط حاليًا هو `mqerrhdlkahtvrlwwwtq`، وقد تم تصفير `public` وحسابات Auth، ثم إعادة كتالوج HOME SERVICE (12 خدمة و11 قسمًا).
+2. طبّق migration المصدر `supabase/migrations/20261010000000_initial_schema.sql` و`supabase/migrations/20261010000001_runtime_bootstrap.sql` على أي مشروع جديد.
+3. فعّل Email Auth أو مزود تسجيل الدخول المطلوب من Authentication.
+4. لا تجعل إنشاء دور `admin` متاحًا من الواجهة. امنح أول مدير عبر SQL آمن بعد تسجيل حسابه ومراجعة معرّف المستخدم:
 
 ```sql
 update public.user_roles
@@ -53,15 +52,15 @@ where user_id = 'USER_UUID_FROM_AUTH_USERS';
 
 ## Vercel
 
-1. ارفع المشروع إلى GitHub أو اربطه مباشرة من Vercel.
+1. المستودع المرتبط: `https://github.com/macs191/HOME`، والفرع `main`.
 2. اختر إطار Vite، وأمر البناء `npm run build` ومجلد الناتج `dist`.
 3. أضف `VITE_SUPABASE_URL` و`VITE_SUPABASE_ANON_KEY` من Project Settings، دون أي Service Role key.
 4. نفّذ Deploy ثم اختبر `/`, `/services`, `/book`, `/customer`, `/provider`, `/admin`.
 5. قبل الإنتاج، اربط مسار SPA في `vercel.json` واختبر الجلسات والـ RLS من متصفح مستقل، بما في ذلك `/login`.
 
-## ما لم يُفعّل بعد
+## الدفع الإلكتروني
 
-لا توجد في هذه الجلسة مفاتيح Supabase أو مزود خرائط أو بوابة دفع؛ لذلك يعمل التطبيق الآن في وضع المعاينة. حتى بعد إدخال مفاتيح Supabase يجب تطبيق migration واختبار RPC وRLS قبل اعتبار البيانات حية. الدفع الإلكتروني يحتاج إنشاء العملية من الخادم، التحقق من webhook وتوقيعه، ومفتاح idempotency لمنع تكرار المعالجة. الدفع النقدي هو الحالة المبدئية في مخطط قاعدة البيانات.
+تم نشر وظيفتي Supabase Edge باسم `create-checkout-session` (JWT مطلوب) و`stripe-webhook` (تحقق توقيع Stripe مخصص). بعد تأكيد الفني المهمة، ينشئ `confirm_booking_completion` سجل الدفع، ويجهز زر العميل جلسة Checkout عبر `prepare_payment`. يلزم فقط إضافة الأسرار التالية في Supabase Edge Function Secrets لتفعيل التحصيل الفعلي: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, و`PUBLIC_APP_URL`. لا تُضع هذه القيم في Vite أو GitHub. إذا لم تُضف بعد، ستظهر رسالة إعداد واضحة بدل الادعاء بنجاح الدفع.
 
 ## صفحات المشروع
 
