@@ -1,0 +1,10 @@
+{
+  "routes": [
+    { "path": "/", "title": "الرئيسية" },
+    { "path": "/services", "title": "الخدمات" },
+    { "path": "/book", "title": "إنشاء طلب" },
+    { "path": "/customer", "title": "مساحة العميل" },
+    { "path": "/provider", "title": "مساحة الفني" },
+    { "path": "/admin", "title": "لوحة الإدارة" }
+  ]
+}

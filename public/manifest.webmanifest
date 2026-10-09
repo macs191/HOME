@@ -1,0 +1,11 @@
+{
+  "name": "هوم سيرفس",
+  "short_name": "هوم سيرفس",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f7f4",
+  "theme_color": "#0d1b2a",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": []
+}
