@@ -5,6 +5,7 @@
     { "path": "/book", "title": "إنشاء طلب" },
     { "path": "/customer", "title": "مساحة العميل" },
     { "path": "/provider", "title": "مساحة الفني" },
-    { "path": "/admin", "title": "لوحة الإدارة" }
+    { "path": "/admin", "title": "لوحة الإدارة" },
+    { "path": "/login", "title": "تسجيل الدخول" }
   ]
 }

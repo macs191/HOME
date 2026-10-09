@@ -364,3 +364,90 @@ create policy "admins manage companies" on public.companies for all using (publi
 -- Storage buckets تُنشأ من لوحة Supabase أو عبر Storage API، مع إبقاء المستندات خاصة.
 -- مثال السياسات بعد إنشاء bucket باسم booking-attachments:
 -- create policy "booking participants read attachments" on storage.objects for select using (bucket_id = 'booking-attachments' and auth.uid() is not null);
+
+
+-- سياسات الجداول التي لا يجوز تركها بلا قواعد صريحة.
+create policy "company members see own company" on public.company_members for select using (
+  user_id = auth.uid() or exists (select 1 from public.companies c where c.id = company_id and (c.owner_id = auth.uid() or public.is_admin()))
+);
+create policy "company managers manage members" on public.company_members for all using (
+  public.is_admin() or exists (select 1 from public.companies c where c.id = company_id and c.owner_id = auth.uid())
+) with check (
+  public.is_admin() or exists (select 1 from public.companies c where c.id = company_id and c.owner_id = auth.uid())
+);
+create policy "providers manage own services" on public.provider_services for all using (provider_id = auth.uid() or public.is_admin()) with check (provider_id = auth.uid() or public.is_admin());
+create policy "providers manage own service areas" on public.provider_service_areas for all using (provider_id = auth.uid() or public.is_admin()) with check (provider_id = auth.uid() or public.is_admin());
+create policy "providers manage own locations" on public.provider_locations for all using (provider_id = auth.uid() or public.is_admin()) with check (provider_id = auth.uid() or public.is_admin());
+create policy "customers see assigned provider location" on public.provider_locations for select using (
+  provider_id = auth.uid() or public.is_admin() or exists (
+    select 1 from public.bookings b where b.provider_id = provider_locations.provider_id and b.customer_id = auth.uid() and b.status in ('assigned','on_the_way','arrived','in_progress')
+  )
+);
+create policy "booking participants manage attachments" on public.booking_attachments for select using (
+  uploader_id = auth.uid() or public.is_admin() or exists (select 1 from public.bookings b where b.id = booking_id and (b.customer_id = auth.uid() or b.provider_id = auth.uid()))
+);
+create policy "booking participants upload attachments" on public.booking_attachments for insert with check (
+  uploader_id = auth.uid() and exists (select 1 from public.bookings b where b.id = booking_id and (b.customer_id = auth.uid() or b.provider_id = auth.uid()))
+);
+create policy "participants read payments" on public.payments for select using (
+  public.is_admin() or exists (select 1 from public.bookings b where b.id = booking_id and (b.customer_id = auth.uid() or b.provider_id = auth.uid()))
+);
+create policy "admins manage coupons" on public.coupons for all using (public.is_admin()) with check (public.is_admin());
+create policy "admins insert audit logs" on public.audit_logs for insert with check (public.is_admin() and actor_id = auth.uid());
+
+-- العمليات الحساسة لا تقبل status أو السعر أو هوية العميل من المتصفح.
+create or replace function public.create_booking(
+  p_service_id uuid,
+  p_city text,
+  p_district text,
+  p_address_text text,
+  p_access_notes text,
+  p_latitude numeric,
+  p_longitude numeric,
+  p_location_source public.location_source,
+  p_issue_description text,
+  p_urgency text,
+  p_scheduled_date date,
+  p_scheduled_slot text
+) returns public.bookings
+language plpgsql security definer set search_path = public
+as $$
+declare new_booking public.bookings;
+begin
+  if auth.uid() is null then raise exception 'authentication_required'; end if;
+  if not exists (select 1 from public.services where id = p_service_id and is_active = true) then raise exception 'service_unavailable'; end if;
+  if p_latitude is not null and (p_latitude < -90 or p_latitude > 90) then raise exception 'invalid_latitude'; end if;
+  if p_longitude is not null and (p_longitude < -180 or p_longitude > 180) then raise exception 'invalid_longitude'; end if;
+  insert into public.bookings (customer_id, service_id, city, district, address_text, access_notes, latitude, longitude, location_source, location_captured_at, issue_description, urgency, scheduled_date, scheduled_slot, status)
+  values (auth.uid(), p_service_id, trim(p_city), nullif(trim(p_district), ''), trim(p_address_text), nullif(trim(p_access_notes), ''), p_latitude, p_longitude, p_location_source, case when p_location_source = 'gps' then now() else null end, trim(p_issue_description), case when p_urgency = 'urgent' then 'urgent' else 'normal' end, p_scheduled_date, nullif(trim(p_scheduled_slot), ''), 'pending')
+  returning * into new_booking;
+  insert into public.booking_status_history (booking_id, to_status, changed_by, note) values (new_booking.id, 'pending', auth.uid(), 'تم إنشاء الطلب');
+  return new_booking;
+end;
+$$;
+revoke all on function public.create_booking(uuid, text, text, text, text, numeric, numeric, public.location_source, text, text, date, text) from public;
+grant execute on function public.create_booking(uuid, text, text, text, text, numeric, numeric, public.location_source, text, text, date, text) to authenticated;
+
+create or replace function public.transition_booking_status(p_booking_id uuid, p_to_status public.booking_status, p_note text default null)
+returns public.bookings language plpgsql security definer set search_path = public
+as $$
+declare current_booking public.bookings; changed public.bookings;
+begin
+  select * into current_booking from public.bookings where id = p_booking_id for update;
+  if current_booking.id is null then raise exception 'booking_not_found'; end if;
+  if not (public.is_admin() or current_booking.provider_id = auth.uid() or current_booking.customer_id = auth.uid()) then raise exception 'not_authorized'; end if;
+  if current_booking.status in ('completed','cancelled') then raise exception 'terminal_booking'; end if;
+  if p_to_status = 'completed' and not (public.is_admin() or current_booking.provider_id = auth.uid()) then raise exception 'provider_required'; end if;
+  update public.bookings set status = p_to_status, updated_at = now() where id = p_booking_id returning * into changed;
+  insert into public.booking_status_history (booking_id, from_status, to_status, changed_by, note) values (p_booking_id, current_booking.status, p_to_status, auth.uid(), nullif(trim(p_note), ''));
+  return changed;
+end;
+$$;
+revoke all on function public.transition_booking_status(uuid, public.booking_status, text) from public;
+grant execute on function public.transition_booking_status(uuid, public.booking_status, text) to authenticated;
+
+-- منع الكتابة المباشرة في الأعمدة الحساسة من متصفح المستخدم؛ استخدم RPC أعلاه أو Edge Functions.
+revoke insert, update, delete on public.bookings from anon, authenticated;
+revoke insert, update, delete on public.booking_status_history from anon, authenticated;
+revoke insert, update, delete on public.payments from anon, authenticated;
+revoke insert, update, delete on public.audit_logs from anon, authenticated;
