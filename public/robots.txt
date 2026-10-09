@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /customer
+Disallow: /provider
+Disallow: /admin
+Disallow: /api/
+Sitemap: https://home-macs191.vercel.app/sitemap.xml
