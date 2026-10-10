@@ -108,6 +108,7 @@ export async function startPayment(bookingId: string) {
 
 export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provider'> = 'customer') {
   if (!supabase) throw new Error('أضف إعدادات Supabase أولًا لتفعيل الدخول بحساب Google.')
+  localStorage.setItem('homefix-google-role', role)
   const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/${role === 'provider' ? 'provider' : 'customer'}` } })
   if (error) throw new Error(authMessage(error))
 }
@@ -157,4 +158,12 @@ export async function addProviderLedgerEntry(providerId: string, bookingId: stri
   const { data, error } = await supabase.rpc('add_provider_ledger_entry', { p_provider_id: providerId, p_booking_id: bookingId, p_entry_type: entryType, p_amount: amount, p_note: note })
   if (error) throw new Error(error.message || 'تعذر حفظ القيد المالي.')
   return data
+}
+
+export async function ensureProviderProfile() {
+  if (!supabase) return
+  if (localStorage.getItem('homefix-google-role') !== 'provider') return
+  const { error } = await supabase.rpc('ensure_provider_profile')
+  if (error) throw new Error(error.message || 'تعذر تجهيز ملف الفني.')
+  localStorage.removeItem('homefix-google-role')
 }
