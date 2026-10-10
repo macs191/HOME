@@ -76,4 +76,4 @@ where user_id = 'USER_UUID_FROM_AUTH_USERS';
 - زر طلب الخدمة يفتح حوار حساب قبل إدخال العنوان، مع Google OAuth عند تفعيل Google provider في Supabase Auth.
 - صفحة الفني تحتوي على نموذج اعتماد ورفع هوية إلى bucket خاص، ولا تعرض المستندات إلا لصاحبها أو الإدارة عبر RLS.
 - لوحة الإدارة تحتوي على إسناد طلب وقيود أجر/خصم/تسوية عبر RPC. طبّق `supabase/migrations/20261010000002_provider_operations.sql` قبل التشغيل.
-- عند رفض تطبيق migration بسبب صلاحيات اتصال Supabase، تبقى الواجهة صادقة وتظهر رسالة الخطأ بدل إنشاء بيانات أو مستندات غير محمية.
+- تم تطبيق migrations على مشروع Supabase الجديد `ojivulfurjjsskqzghfb` وتفعيل جداول الفنيين وRLS وEdge Functions؛ تبقى أسرار Stripe الخاصة ببوابة الدفع مطلوبة داخل إعدادات Edge Functions.
