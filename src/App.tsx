@@ -6,7 +6,7 @@ import { Shell } from './components/Shell'
 import { MapPicker } from './components/MapPicker'
 import { categories, getCategory, getService, services, stats } from './lib/data'
 import { haversineKm, requestCurrentPosition, type GeoPoint } from './lib/geo'
-import { createBookingFromDraft, dataModeLabel, getMyBookings, isSupabaseConfigured, signInAccount, signUpAccount, startPayment } from './lib/supabase'
+import { createBookingFromDraft, dataModeLabel, getAuthState, getMyBookings, isSupabaseConfigured, onAuthStateChange, signInAccount, signUpAccount, startPayment, type AuthState } from './lib/supabase'
 import type { BookingDraft, Role } from './types'
 
 const initialDraft: BookingDraft = { issue: '', urgency: 'normal', city: '', district: '', address: '', accessNotes: '', locationSource: 'none', scheduledDate: '', scheduledSlot: '' }
@@ -14,7 +14,15 @@ const initialDraft: BookingDraft = { issue: '', urgency: 'normal', city: '', dis
 function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('homefix-theme') as 'light' | 'dark' | null) ?? 'light')
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('homefix-theme', theme) }, [theme])
-  return <Shell theme={theme} onThemeChange={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><Routes><Route path="/" element={<HomePage />} /><Route path="/services" element={<ServicesPage />} /><Route path="/book" element={<BookingPage />} /><Route path="/customer" element={<CustomerPage />} /><Route path="/provider" element={<ProviderPage />} /><Route path="/admin" element={<AdminPage />} /><Route path="/login" element={<LoginPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></Shell>
+  return <Shell theme={theme} onThemeChange={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><Routes><Route path="/" element={<HomePage />} /><Route path="/services" element={<ServicesPage />} /><Route path="/book" element={<BookingPage />} /><Route path="/customer" element={<ProtectedRoute><CustomerPage /></ProtectedRoute>} /><Route path="/provider" element={<ProtectedRoute><ProviderPage /></ProtectedRoute>} /><Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} /><Route path="/login" element={<LoginPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></Shell>
+}
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const [state, setState] = useState<AuthState | null>(null)
+  useEffect(() => { let active = true; getAuthState().then((next) => { if (active) setState(next) }); const subscription = onAuthStateChange((next) => { if (active) setState(next) }); return () => { active = false; subscription.unsubscribe() } }, [])
+  if (!state) return <div className="container loading-state">جارٍ التحقق من جلسة الحساب...</div>
+  if (!state.user) return <Navigate to="/login" replace />
+  return <>{children}</>
 }
 
 function StatusPill({ children, tone = 'neutral' }: { children: React.ReactNode; tone?: 'neutral' | 'success' | 'warning' | 'dark' }) { return <span className={`status-pill ${tone}`}>{children}</span> }
