@@ -3,8 +3,8 @@
   "short_name": "هوم سيرفس",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f6f7f4",
-  "theme_color": "#0d1b2a",
+  "background_color": "#0c0b09",
+  "theme_color": "#d9ad55",
   "lang": "ar",
   "dir": "rtl",
   "icons": []

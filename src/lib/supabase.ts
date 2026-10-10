@@ -104,3 +104,57 @@ export async function startPayment(bookingId: string) {
   window.open(data.url, '_blank', 'noopener,noreferrer')
   return data.url as string
 }
+
+
+export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provider'> = 'customer') {
+  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا لتفعيل الدخول بحساب Google.')
+  const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/${role === 'provider' ? 'provider' : 'customer'}` } })
+  if (error) throw new Error(authMessage(error))
+}
+
+export async function submitProviderVerification(input: { yearsExperience: number; serviceDescription: string; nationalIdLast4: string; identityFile: File }) {
+  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا لتفعيل رفع مستند الهوية.')
+  const { data: sessionData } = await supabase.auth.getSession()
+  const userId = sessionData.session?.user.id
+  if (!userId) throw new Error('سجّل الدخول قبل إرسال ملف الفني.')
+  if (input.identityFile.size > 5 * 1024 * 1024) throw new Error('حجم صورة الهوية يجب ألا يتجاوز 5 ميجابايت.')
+  if (!['image/jpeg', 'image/png', 'application/pdf'].includes(input.identityFile.type)) throw new Error('ارفع صورة JPG أو PNG أو ملف PDF فقط.')
+  const safeName = input.identityFile.name.replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase()
+  const path = `${userId}/${crypto.randomUUID()}-${safeName}`
+  const { error: uploadError } = await supabase.storage.from('identity-documents').upload(path, input.identityFile, { contentType: input.identityFile.type, upsert: false })
+  if (uploadError) throw new Error(uploadError.message || 'تعذر رفع صورة الهوية.')
+  const { error: profileError } = await supabase.from('provider_profiles').update({ years_experience: input.yearsExperience, service_description: input.serviceDescription.trim(), national_id_last4: input.nationalIdLast4.slice(-4), onboarding_completed: true }).eq('user_id', userId)
+  if (profileError) throw new Error(profileError.message || 'تعذر حفظ بيانات الفني.')
+  const { error: documentError } = await supabase.from('provider_documents').insert({ provider_id: userId, document_type: 'national_id', storage_path: path, status: 'pending' })
+  if (documentError) throw new Error(documentError.message || 'تعذر تسجيل مستند الهوية للمراجعة.')
+}
+
+export async function getProviderWorkQueue() {
+  if (!supabase) return { data: [], error: null }
+  return supabase.from('bookings').select('id,booking_number,status,city,district,address_text,scheduled_date,scheduled_slot,price_snapshot,provider_amount_snapshot,created_at,services(name_ar)').eq('provider_id', (await supabase.auth.getUser()).data.user?.id ?? '').order('created_at', { ascending: false }).limit(50)
+}
+
+export async function getProviderLedger() {
+  if (!supabase) return { data: [], error: null }
+  const userId = (await supabase.auth.getUser()).data.user?.id
+  return supabase.from('provider_ledger_entries').select('id,entry_type,amount,note,booking_id,created_at').eq('provider_id', userId ?? '').order('created_at', { ascending: false }).limit(100)
+}
+
+export async function getAdminProviderApplications() {
+  if (!supabase) return { data: [], error: null }
+  return supabase.from('provider_profiles').select('user_id,approval_status,years_experience,service_description,onboarding_completed,created_at,profiles(full_name,phone),provider_documents(id,status,storage_path,created_at)').order('created_at', { ascending: false }).limit(100)
+}
+
+export async function assignBookingToProvider(bookingId: string, providerId: string) {
+  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  const { data, error } = await supabase.rpc('assign_booking', { p_booking_id: bookingId, p_provider_id: providerId })
+  if (error) throw new Error(error.message || 'تعذر إسناد الطلب.')
+  return data
+}
+
+export async function addProviderLedgerEntry(providerId: string, bookingId: string | null, entryType: 'earning' | 'late_penalty' | 'adjustment' | 'payout', amount: number, note: string) {
+  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  const { data, error } = await supabase.rpc('add_provider_ledger_entry', { p_provider_id: providerId, p_booking_id: bookingId, p_entry_type: entryType, p_amount: amount, p_note: note })
+  if (error) throw new Error(error.message || 'تعذر حفظ القيد المالي.')
+  return data
+}

@@ -5,3 +5,8 @@ dist
 !.env.example
 .DS_Store
 *.local
+
+# private local documents
+*.key
+*.pem
+identity-uploads/
