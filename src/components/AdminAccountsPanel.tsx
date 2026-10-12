@@ -66,9 +66,10 @@ export function AdminAccountsPanel() {
     try {
       await updateAdminAccount({ userId: selected.user_id, fullName: form.fullName, phone: form.phone, city: form.city, yearsExperience: selected.role === 'provider' ? Number(form.years) : null, serviceDescription: form.description })
       setMessage('تم حفظ التعديلات.')
-      await loadAccounts()
-      const updated = accounts.find((item) => item.user_id === selected.user_id)
-      if (updated) setSelected({ ...selected, full_name: form.fullName, phone: form.phone, city: form.city, years_experience: selected.role === 'provider' ? Number(form.years) : null, service_description: form.description })
+      const updatedAccount = { ...selected, full_name: form.fullName.trim(), phone: form.phone.trim() || null, city: form.city.trim() || null, years_experience: selected.role === 'provider' ? Number(form.years) : null, service_description: form.description.trim() }
+      setSelected(updatedAccount)
+      setAccounts((current) => current.map((item) => item.user_id === selected.user_id ? { ...item, ...updatedAccount } : item))
+      void loadAccounts()
       const refreshed = await getAdminAccountRecords(selected.user_id); setRecords(refreshed)
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'تعذر حفظ التغييرات.') }
     finally { setSaving(false) }

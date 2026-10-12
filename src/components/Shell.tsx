@@ -26,7 +26,7 @@ export function Shell({ children, theme, onThemeChange }: { children: ReactNode;
         <div className="topbar-actions">
           {installPrompt && <button className="button button-small install-app-button" onClick={() => void installApp()}>تثبيت التطبيق</button>}
           <Link className="icon-button hide-mobile" aria-label="بحث" to="/services"><Search size={18} /></Link>
-          <Link className="icon-button" aria-label="إشعارات العميل" title="إشعارات العميل" to="/customer#notifications"><Bell size={18} /></Link>
+          <Link className="icon-button" aria-label="مركز الإشعارات" title="مركز الإشعارات" to={location.pathname.startsWith('/admin') ? '/admin/notifications' : location.pathname.startsWith('/provider') ? '/provider/notifications' : '/customer/notifications'}><Bell size={18} /></Link>
           <button className="icon-button" onClick={onThemeChange} aria-label="تغيير المظهر">{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button>
           <Link to="/customer/login" className="login-link hide-mobile">دخول العملاء</Link>
           <Link to="/book" className="button button-small hide-mobile">ابدأ طلبك</Link>

@@ -1,3 +1,3 @@
 export default {
-  logoUrl: 'https://dummyimage.com/512x512/0d1b2a/20d4c5.png&text=H',
+  logoUrl: 'https://raw.githubusercontent.com/macs191/HOME/main/public/icons/homefix-512.png',
 }

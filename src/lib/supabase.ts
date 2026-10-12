@@ -55,6 +55,17 @@ export async function getLiveCatalog(): Promise<{ categories: ServiceCategory[];
 }
 
 export type AuthState = { session: Session | null; user: User | null }
+export type AppNotification = { id: string; title: string; body: string; notification_type: string; target_path: string | null; is_read: boolean; created_at: string }
+
+export async function subscribeToMyNotifications(onInsert: (notification: AppNotification) => void) {
+  if (!supabase) return () => undefined
+  const { data } = await supabase.auth.getUser()
+  if (!data.user) return () => undefined
+  const channel = supabase.channel(`notifications:${data.user.id}:${crypto.randomUUID()}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${data.user.id}` }, (payload) => onInsert(payload.new as AppNotification))
+    .subscribe()
+  return () => { void supabase?.removeChannel(channel) }
+}
 
 function authMessage(error: { message?: string }) {
   const message = error.message?.toLowerCase() ?? ''
@@ -242,6 +253,7 @@ export async function submitProviderOnboarding(input: { yearsExperience: number;
     })
     if (error) {
       const code = error.message.toLowerCase()
+      if (code.includes('provider_onboarding_already_submitted')) throw new Error('تم إرسال ملفك بالفعل وهو قيد المراجعة أو معتمد؛ لا حاجة لإعادة الإرسال.')
       if (code.includes('at_least_one_service_required')) throw new Error('اختر خدمة واحدة على الأقل.')
       if (code.includes('service_unavailable')) throw new Error('تغيّرت قائمة الخدمات. حدّث الصفحة واختر الخدمات المتاحة.')
       if (code.includes('invalid_experience_years')) throw new Error('أدخل سنوات خبرة صحيحة بين 0 و70.')
@@ -270,7 +282,16 @@ export async function updateAdminAccount(input: { userId: string; fullName: stri
     p_city: input.city || null, p_years_experience: input.yearsExperience ?? null,
     p_service_description: input.serviceDescription ?? null,
   })
-  if (error) throw new Error(error.message.includes('admin_required') ? 'يلزم حساب إداري لتعديل الحسابات.' : 'تعذر حفظ التغييرات. تحقق من البيانات وحاول مرة أخرى.')
+  if (error) {
+    const code = error.message.toLowerCase()
+    if (code.includes('admin_required')) throw new Error('يلزم حساب إداري لتعديل الحسابات.')
+    if (code.includes('account_not_found')) throw new Error('الحساب غير موجود أو ليس من نوع عميل أو فني.')
+    if (code.includes('invalid_full_name')) throw new Error('أدخل اسمًا من حرفين إلى 160 حرفًا.')
+    if (code.includes('invalid_phone')) throw new Error('رقم الجوال أطول من الحد المسموح.')
+    if (code.includes('invalid_city')) throw new Error('اسم المدينة أطول من الحد المسموح.')
+    if (code.includes('invalid_experience_years')) throw new Error('سنوات الخبرة يجب أن تكون بين 0 و70.')
+    throw new Error(`تعذر حفظ التغييرات: ${error.message}`)
+  }
 }
 
 export async function updateAdminProviderSpecialties(providerId: string, serviceIds: string[]) {

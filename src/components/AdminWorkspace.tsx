@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Check, ChevronLeft, FileText, Gauge, Layers3, LogOut, MapPin, Search, Send, Settings2, ShieldCheck, TicketPercent, UsersRound, WalletCards, X } from 'lucide-react'
+import { ArrowLeft, Bell, Check, ChevronLeft, FileText, Gauge, Layers3, LogOut, MapPin, Search, Send, Settings2, ShieldCheck, TicketPercent, UsersRound, WalletCards, X } from 'lucide-react'
 import { AdminMarketplacePanel } from './AdminMarketplacePanel'
 import { AdminAccountsPanel } from './AdminAccountsPanel'
 import { addProviderLedgerEntry, assignBookingToProvider, getAdminOperations, getAdminOverview, getAdminProviderApplications, reviewProviderVerification, setProviderCommission, signOutAccount } from '../lib/supabase'
+import { MobileBottomNav } from './MobileBottomNav'
+import { NotificationsPanel } from './NotificationsPanel'
 
-type Section = 'overview' | 'operations' | 'accounts' | 'applications' | 'catalog' | 'quotes' | 'payments' | 'settings'
+type Section = 'overview' | 'operations' | 'accounts' | 'applications' | 'catalog' | 'quotes' | 'payments' | 'settings' | 'notifications'
 const navItems: { id: Section; label: string; icon: typeof Gauge }[] = [
   { id: 'overview', label: 'نظرة عامة', icon: Gauge }, { id: 'operations', label: 'الطلبات والإسناد', icon: FileText },
   { id: 'accounts', label: 'العملاء والفنيون', icon: UsersRound }, { id: 'applications', label: 'طلبات اعتماد الفنيين', icon: ShieldCheck }, { id: 'catalog', label: 'الأقسام والخدمات', icon: Layers3 },
   { id: 'quotes', label: 'عروض الأسعار', icon: TicketPercent }, { id: 'payments', label: 'الفواتير والتحصيل', icon: WalletCards },
-  { id: 'settings', label: 'إعدادات المنصة', icon: Settings2 },
+  { id: 'settings', label: 'إعدادات المنصة', icon: Settings2 }, { id: 'notifications', label: 'الإشعارات', icon: Bell },
 ]
-const sectionTitle: Record<Section, string> = { overview: 'نظرة عامة', operations: 'الطلبات والإسناد', accounts: 'العملاء والفنيون', applications: 'طلبات اعتماد الفنيين', catalog: 'الأقسام والخدمات', quotes: 'عروض الأسعار', payments: 'الفواتير والتحصيل', settings: 'إعدادات المنصة' }
+const sectionTitle: Record<Section, string> = { overview: 'نظرة عامة', operations: 'الطلبات والإسناد', accounts: 'العملاء والفنيون', applications: 'طلبات اعتماد الفنيين', catalog: 'الأقسام والخدمات', quotes: 'عروض الأسعار', payments: 'الفواتير والتحصيل', settings: 'إعدادات المنصة', notifications: 'الإشعارات' }
 
 export function AdminWorkspace() {
   const { section: rawSection } = useParams()
@@ -80,8 +82,10 @@ export function AdminWorkspace() {
         </section>}
         {!loading && section === 'applications' && <section className="panel"><div className="panel-heading"><div><span className="eyebrow">الفريق</span><h2>طلبات اعتماد الفنيين</h2><p className="muted">راجع التخصص والخبرة والمستندات قبل تفعيل الإسناد.</p></div><span className="status-pill">{applications.length} ملفات</span></div>{applications.length ? <div className="provider-applications">{applications.map((item) => <article className="application-row" key={item.user_id}><div><strong>{item.profiles?.full_name ?? 'فني بدون اسم'}</strong><small>{item.profiles?.phone ?? 'لا يوجد جوال'} · {item.approval_status} · {item.years_experience ?? 0} سنوات خبرة</small><small>{(item.provider_services ?? []).filter((x: any) => x.is_active).map((x: any) => x.services?.name_ar).filter(Boolean).join('، ') || 'لا توجد تخصصات مسجلة'}</small></div><div className="application-actions"><span className="status-pill">{item.provider_documents?.find((document: any) => document.is_current !== false)?.status ?? 'بدون مستند'}</span><label className="commission-control">العمولة %<input type="number" min="0" max="100" step="0.01" value={commissionInputs[item.user_id] ?? item.default_commission_rate ?? ''} onChange={(e) => setCommissionInputs({ ...commissionInputs, [item.user_id]: e.target.value })} placeholder="الافتراضي" /></label><button type="button" className="button button-secondary button-small" disabled={busy || commissionInputs[item.user_id] == null || commissionInputs[item.user_id] === ''} onClick={() => saveCommission(item.user_id)}>حفظ العمولة</button>{item.approval_status === 'pending' && <><button type="button" className="button button-primary button-small" disabled={busy} onClick={() => review(item.user_id,'approved')}>اعتماد</button><button type="button" className="button button-secondary button-small" disabled={busy} onClick={() => review(item.user_id,'rejected')}>رفض</button></>}</div></article>)}</div> : <p className="empty-inline">لا توجد طلبات اعتماد بانتظار المراجعة.</p>}</section>}
         {!loading && section === 'accounts' && <AdminAccountsPanel />}
+        {section === 'notifications' && <NotificationsPanel />}
         {['catalog','quotes','payments','settings'].includes(section) && <AdminMarketplacePanel section={section as 'catalog'|'quotes'|'payments'|'settings'} />}
       </main>
     </div>
+    <MobileBottomNav items={navItems.map(({ id, label, icon }) => ({ to: `/admin/${id}`, label: id === 'overview' ? 'الرئيسية' : id === 'operations' ? 'الطلبات' : id === 'accounts' ? 'الحسابات' : id === 'applications' ? 'الفنيون' : id === 'catalog' ? 'الخدمات' : id === 'quotes' ? 'التسعير' : id === 'payments' ? 'الفواتير' : id === 'settings' ? 'الإعدادات' : 'الإشعارات', icon }))} activePath={location.pathname} />
   </div>
 }

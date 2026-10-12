@@ -7,6 +7,17 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))).then(() => self.clients.claim()))
 })
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const raw = event.notification.data && event.notification.data.url
+  const aliases = { '/customer#orders': '/customer/orders', '/customer#notifications': '/customer/notifications', '/provider#work-queue': '/provider/work-queue', '/provider#ledger': '/provider/ledger', '/admin#quotes': '/admin/quotes', '/admin#payments': '/admin/payments', '/admin#operations': '/admin/operations' }
+  const safePath = typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//') ? (aliases[raw] || raw) : ROOT
+  const target = new URL(safePath, self.location.origin).href
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+    const existing = clients.find((client) => new URL(client.url).origin === self.location.origin)
+    return existing ? existing.navigate(target).then(() => existing.focus()) : self.clients.openWindow(target)
+  }))
+})
 self.addEventListener('fetch', (event) => {
   const request = event.request
   const url = new URL(request.url)
