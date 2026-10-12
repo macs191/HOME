@@ -136,3 +136,52 @@ html[data-theme="light"] .quick-action,html[data-theme="light"] .booking-row { b
 
 .application-documents{display:grid;gap:7px;margin-top:10px}.application-document-list{display:grid;gap:6px;padding:9px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}.application-document{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px}.application-document-links{display:flex;gap:10px}.application-document-links a{color:var(--teal-dark);font-weight:700;text-decoration:underline}.application-bio{font-size:11px;line-height:1.6;margin:5px 0;color:var(--muted);overflow-wrap:anywhere}@media(max-width:600px){.application-document{align-items:flex-start;flex-direction:column}.application-document-links{width:100%;justify-content:space-between}}
 .account-detail-actions{flex-wrap:wrap;justify-content:flex-end}.account-detail-actions .button{font-size:10px}@media(max-width:760px){.account-detail-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.account-detail-actions .button,.account-detail-actions .icon-button{width:100%;justify-content:center}}
+
+
+/* HOME depth system: tactile surfaces, soft edge highlights and restrained 3D lift. */
+body { background: radial-gradient(ellipse at 8% 6%, color-mix(in srgb, var(--teal) 7%, transparent), transparent 36%), radial-gradient(ellipse at 94% 36%, color-mix(in srgb, var(--yellow) 6%, transparent), transparent 30%), var(--bg); }
+.panel, .metric-card, .auth-card, .search-panel, .category-card, .service-card, .stat-card, .application-row, .account-list-panel, .account-detail-panel, .provider-banner, .booking-card {
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--surface) 86%, transparent), 0 12px 25px rgba(13, 27, 42, .075), 0 27px 52px rgba(13, 27, 42, .035);
+  transform-style: preserve-3d;
+  transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+}
+.panel, .auth-card, .search-panel, .metric-card, .stat-card, .application-row, .account-list-panel, .account-detail-panel { border-color: color-mix(in srgb, var(--line) 82%, var(--surface)); }
+.category-card, .service-card { box-shadow: 0 3px 0 color-mix(in srgb, var(--surface) 92%, var(--line)), 0 12px 25px rgba(13, 27, 42, .07), 0 24px 42px rgba(13, 27, 42, .03); }
+.button-primary { box-shadow: 0 3px 0 color-mix(in srgb, var(--navy) 80%, #000), 0 10px 20px rgba(13, 27, 42, .18); }
+.main-service-card { transform: perspective(900px) rotateY(-3deg) rotateX(1deg); box-shadow: 0 3px 0 #0a1420, 0 22px 35px rgba(13, 27, 42, .2), 0 48px 70px rgba(13, 27, 42, .15); }
+.hero-visual { perspective: 1100px; }
+.hero-service-card, .hero-trust-card { transform: translateZ(28px); }
+.category-icon, .metric-icon, .feature-icon, .auth-mark { box-shadow: inset 0 1px 0 rgba(255,255,255,.58), 0 5px 10px rgba(13,27,42,.07); }
+.floating-card { box-shadow: 0 3px 0 color-mix(in srgb, var(--line) 70%, var(--surface)), 0 14px 28px rgba(13, 27, 42, .14); }
+.provider-extra-documents { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.provider-extra-documents .file-drop { min-width: 0; }
+.file-drop .optional { display: inline-flex; align-items: center; padding: 2px 8px; border: 1px solid var(--line); border-radius: 99px; color: var(--muted); font-size: 10px; font-weight: 600; }
+.application-document-links button { border: 0; background: transparent; color: var(--teal-dark); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.document-viewer-overlay { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: rgba(7, 18, 28, .76); backdrop-filter: blur(9px); }
+.document-viewer-dialog { display: flex; flex-direction: column; width: min(980px, 100%); max-height: min(92dvh, 1000px); overflow: hidden; border: 1px solid color-mix(in srgb, var(--teal) 27%, var(--line)); border-radius: 22px; background: var(--surface); color: var(--ink); box-shadow: 0 4px 0 rgba(255,255,255,.08), 0 30px 100px rgba(0,0,0,.4); direction: rtl; }
+.document-viewer-header, .document-viewer-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; }
+.document-viewer-header { border-bottom: 1px solid var(--line); }
+.document-viewer-header .eyebrow { margin: 0; }
+.document-viewer-header h2 { margin: 3px 0 0; font-size: 17px; }
+.document-viewer-content { min-height: 180px; overflow: auto; display: grid; place-items: center; padding: 14px; background: color-mix(in srgb, var(--bg) 90%, #0d1b2a); }
+.document-viewer-content img { display: block; max-width: 100%; max-height: 68dvh; width: auto; height: auto; object-fit: contain; border-radius: 8px; box-shadow: 0 12px 32px rgba(0,0,0,.18); }
+.document-viewer-content iframe { width: 100%; height: min(68dvh, 760px); border: 0; border-radius: 8px; background: white; }
+.document-viewer-unsupported { display: grid; place-items: center; gap: 8px; padding: 35px 16px; text-align: center; }
+.document-viewer-unsupported p { margin: 0; color: var(--muted); font-size: 12px; }
+.document-viewer-footer { border-top: 1px solid var(--line); }
+.document-viewer-footer > span { color: var(--muted); font-size: 11px; }
+body:has(.document-viewer-overlay) { overflow: hidden; }
+@media (hover: hover) and (pointer: fine) {
+  .panel:hover, .metric-card:hover, .auth-card:hover, .search-panel:hover, .stat-card:hover, .application-row:hover { transform: translateY(-2px); box-shadow: 0 4px 0 color-mix(in srgb, var(--surface) 88%, transparent), 0 18px 32px rgba(13, 27, 42, .09), 0 34px 56px rgba(13, 27, 42, .05); }
+}
+@media (max-width: 760px) {
+  .provider-extra-documents { grid-template-columns: minmax(0, 1fr); }
+  .document-viewer-overlay { padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom)); }
+  .document-viewer-dialog { max-height: calc(100dvh - 16px); border-radius: 17px; }
+  .document-viewer-header, .document-viewer-footer { padding: 11px 12px; }
+  .document-viewer-content iframe { height: 66dvh; }
+  .document-viewer-footer { align-items: flex-start; flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel, .metric-card, .auth-card, .search-panel, .category-card, .service-card, .stat-card, .application-row, .account-list-panel, .account-detail-panel { transition: none !important; }
+}

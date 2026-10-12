@@ -9,10 +9,11 @@ import { CustomerInvoice } from './components/CustomerInvoice'
 import { ProviderJobCard } from './components/ProviderJobCard'
 import { AdminMarketplacePanel } from './components/AdminMarketplacePanel'
 import { AdminWorkspace } from './components/AdminWorkspace'
+import { GoogleProfileCompletionPage, LoginPage, OAuthCallbackPage } from './components/AuthPages'
 const MapPicker = lazy(() => import('./components/MapPicker').then((module) => ({ default: module.MapPicker })))
 import { categories, getCategory, getService, services } from './lib/data'
 import { haversineKm, requestCurrentPosition, type GeoPoint } from './lib/geo'
-import { acceptProviderQuote, addProviderLedgerEntry, advanceProviderBooking, assignBookingToProvider, createBookingFromDraft, finishFixedPriceBooking, getAdminOverview, getAdminOperations, getAdminProviderApplications, getAuthState, getMyRole, getMyBookings, getMyNotifications, getMyProviderProfile, getProviderLedger, getProviderWorkQueue, getProviderSpecialtyOptions, getProviderSpecialties, saveProviderSpecialties, getLiveCatalog, isSupabaseConfigured, markNotificationRead, onAuthStateChange, reviewProviderVerification, setProviderCommission, signInAccount, signInWithGoogle, signOutAccount, signUpAccount, submitProviderOnboarding, ensureProviderProfile, finishOAuthSignIn, subscribeToMyNotifications, type AppNotification, type AuthState } from './lib/supabase'
+import { acceptProviderQuote, addProviderLedgerEntry, advanceProviderBooking, assignBookingToProvider, createBookingFromDraft, finishFixedPriceBooking, getAdminOverview, getAdminOperations, getAdminProviderApplications, getAuthState, getMyRole, getMyBookings, getMyNotifications, getMyProviderProfile, getProviderLedger, getProviderWorkQueue, getProviderSpecialtyOptions, getProviderSpecialties, saveProviderSpecialties, getLiveCatalog, isSupabaseConfigured, markNotificationRead, onAuthStateChange, reviewProviderVerification, setProviderCommission, signInWithGoogle, signOutAccount, submitProviderOnboarding, ensureProviderProfile, subscribeToMyNotifications, type AppNotification, type AuthState } from './lib/supabase'
 import type { BookingDraft, Role } from './types'
 
 const initialDraft: BookingDraft = { issue: '', urgency: 'normal', city: '', district: '', address: '', accessNotes: '', locationSource: 'none', scheduledDate: '', scheduledSlot: '' }
@@ -40,7 +41,7 @@ function restoreBookingDraft(raw: string, serviceFallback?: string): BookingDraf
 function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => { try { return (localStorage.getItem('homefix-theme-v2') as 'light' | 'dark' | null) ?? 'light' } catch { return 'light' } })
   useEffect(() => { document.documentElement.dataset.theme = theme; try { localStorage.setItem('homefix-theme-v2', theme) } catch { /* التخزين قد يكون معطلًا في التصفح الخاص */ } }, [theme])
-  return <Shell theme={theme} onThemeChange={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><NotificationMonitor /><Routes><Route path="/" element={<HomePage />} /><Route path="/services" element={<ServicesPage />} /><Route path="/book" element={<BookingPage />} /><Route path="/customer/:section?" element={<ProtectedRoute requiredRole="customer"><CustomerPage /></ProtectedRoute>} /><Route path="/provider/:section?" element={<ProtectedRoute requiredRole="provider"><ProviderPage /></ProtectedRoute>} /><Route path="/admin/:section?" element={<ProtectedRoute requiredRole="admin"><AdminPage /></ProtectedRoute>} /><Route path="/login" element={<LoginPage />} /><Route path="/customer/login" element={<LoginPage fixedRole="customer" />} /><Route path="/provider/login" element={<LoginPage fixedRole="provider" />} /><Route path="/auth/callback" element={<OAuthCallbackPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></Shell>
+  return <Shell theme={theme} onThemeChange={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><NotificationMonitor /><Routes><Route path="/" element={<HomePage />} /><Route path="/services" element={<ServicesPage />} /><Route path="/book" element={<BookingPage />} /><Route path="/customer/:section?" element={<ProtectedRoute requiredRole="customer"><CustomerPage /></ProtectedRoute>} /><Route path="/provider/:section?" element={<ProtectedRoute requiredRole="provider"><ProviderPage /></ProtectedRoute>} /><Route path="/admin/:section?" element={<ProtectedRoute requiredRole="admin"><AdminPage /></ProtectedRoute>} /><Route path="/login" element={<LoginPage />} /><Route path="/customer/login" element={<LoginPage fixedRole="customer" />} /><Route path="/provider/login" element={<LoginPage fixedRole="provider" />} /><Route path="/auth/callback" element={<OAuthCallbackPage />} /><Route path="/auth/complete-profile" element={<GoogleProfileCompletionPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></Shell>
 }
 
 function useCatalog() {
@@ -186,6 +187,7 @@ function ProviderPage() {
   const [serviceCity, setServiceCity] = useState('')
   const [identityFront, setIdentityFront] = useState<File | null>(null)
   const [identityBack, setIdentityBack] = useState<File | null>(null)
+  const [certificateFile, setCertificateFile] = useState<File | null>(null)
   const [cvFile, setCvFile] = useState<File | null>(null)
   const [providerMessage, setProviderMessage] = useState('')
   const [workMessage, setWorkMessage] = useState('')
@@ -223,7 +225,7 @@ function ProviderPage() {
     if (!selectedServiceIds.length) { setProviderMessage('اختر خدمة واحدة على الأقل.'); return }
     if (fullName.trim().length < 2 || fullName.trim().length > 160) { setProviderMessage('أدخل الاسم الكامل بحروف تتراوح بين 2 و160 حرفًا.'); return }
     if (!identityFront || !identityBack) { setProviderMessage('أرفق صورة وجه الهوية وصورة ظهرها.'); return }
-    if (!cvFile) { setProviderMessage('أرفق السيرة الذاتية بصيغة PDF أو DOC أو DOCX.'); return }
+    if (!certificateFile) { setProviderMessage('أرفق الشهادة المهنية بصيغة JPG أو PNG أو PDF.'); return }
     const yearsNumber = Number(years)
     if (!Number.isInteger(yearsNumber) || yearsNumber < 0 || yearsNumber > 70) { setProviderMessage('أدخل سنوات خبرة صحيحة بين 0 و70.'); return }
     if (bio.trim().length < 10) { setProviderMessage('اكتب نبذة مهنية من 10 أحرف على الأقل.'); return }
@@ -231,8 +233,8 @@ function ProviderPage() {
     if (serviceCity.trim().length < 2) { setProviderMessage('أدخل مدينة تقديم الخدمة.'); return }
     setBusy(true)
     try {
-      await submitProviderOnboarding({ fullName, yearsExperience: yearsNumber, serviceDescription: bio, phone, city: serviceCity, serviceIds: selectedServiceIds, identityFront, identityBack, cv: cvFile })
-      setProviderMessage('تم إرسال ملفك للمراجعة. ملفات الهوية والسيرة خاصة ولا تظهر للعملاء.')
+      await submitProviderOnboarding({ fullName, yearsExperience: yearsNumber, serviceDescription: bio, phone, city: serviceCity, serviceIds: selectedServiceIds, identityFront, identityBack, certificate: certificateFile, cv: cvFile })
+      setProviderMessage('تم إرسال ملفك للمراجعة. الهوية والشهادة محفوظتان بسرية؛ والسيرة الذاتية اختيارية.')
       await refreshProviderData()
     } catch (error) { setProviderMessage(error instanceof Error ? error.message : 'تعذر إرسال الملف.') }
     finally { setBusy(false) }
@@ -248,18 +250,18 @@ function ProviderPage() {
   if (routeSection && !['overview','work-queue','specialties','verification','ledger','notifications'].includes(routeSection)) return <Navigate to="/provider/overview" replace />
   if (initialLoading) return <div className="container loading-state">جارٍ تجهيز مساحة مقدم الخدمة…</div>
 
-  const onboardingForm = <section className="panel verification-panel provider-onboarding-form"><div className="onboarding-intro"><span className="onboarding-icon"><ShieldCheck size={22} /></span><div><span className="eyebrow">ملف مقدم الخدمة</span><h2>أكمل بيانات التسجيل</h2><p className="muted">لن تظهر الطلبات قبل استكمال البيانات ومراجعتها من الإدارة. الهوية والسيرة محفوظتان بمساحة خاصة.</p></div></div>
+  const onboardingForm = <section className="panel verification-panel provider-onboarding-form"><div className="onboarding-intro"><span className="onboarding-icon"><ShieldCheck size={22} /></span><div><span className="eyebrow">ملف مقدم الخدمة</span><h2>أكمل بيانات التسجيل</h2><p className="muted">لن تظهر الطلبات قبل استكمال البيانات ومراجعتها من الإدارة. الهوية والشهادة محفوظتان بمساحة خاصة، والسيرة الذاتية اختيارية.</p></div></div>
     <form onSubmit={submitVerification}><div className="field-grid"><label className="field-label">الاسم الكامل<input type="text" autoComplete="name" value={fullName} onChange={(e) => setFullName(e.target.value)} required minLength={2} maxLength={160} /></label><label className="field-label">رقم الجوال<input type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required /></label><label className="field-label">مدينة تقديم الخدمة<input value={serviceCity} onChange={(e) => setServiceCity(e.target.value)} autoComplete="address-level2" required maxLength={120} /></label><label className="field-label">سنوات الخبرة<input type="number" min="0" max="70" step="1" value={years} onChange={(e) => setYears(e.target.value)} required /></label></div>
       <label className="field-label">نبذة عن خبرتك ومجالات عملك<textarea value={bio} onChange={(e) => setBio(e.target.value)} required minLength={10} maxLength={3000} placeholder="اذكر خبرتك وأبرز الأعمال التي تنفذها" rows={4} /></label>
       <div className="provider-service-picker"><div><h3>اختر الأقسام والخدمات</h3><p className="muted">يمكنك اختيار أكثر من خدمة. ستُستخدم هذه القائمة لمطابقة الطلبات المناسبة لك.</p></div><div className="specialty-options">{specialtyOptions.map((option) => { const category = Array.isArray(option.service_categories) ? option.service_categories[0] : option.service_categories; return <label className="specialty-option" key={option.id}><input type="checkbox" checked={selectedServiceIds.includes(option.id)} onChange={(event) => setSelectedServiceIds((current) => event.target.checked ? Array.from(new Set([...current, option.id])) : current.filter((id) => id !== option.id))} /><span><strong>{option.name_ar}</strong><small>{category?.name_ar ?? 'خدمة'}</small></span></label> })}</div>{!specialtyOptions.length && <p className="muted">لا توجد خدمات نشطة للاختيار حاليًا.</p>}</div>
       <div className="provider-document-grid"><label className="file-drop"><strong>هوية وطنية — الوجه</strong><span>صوّر الوجه الأمامي بوضوح</span><input type="file" accept="image/jpeg,image/png" capture="environment" onChange={(e) => setIdentityFront(e.target.files?.[0] ?? null)} required /><small>{identityFront?.name ?? 'JPG أو PNG · حتى 5MB'}</small></label><label className="file-drop"><strong>هوية وطنية — الظهر</strong><span>صوّر الوجه الخلفي بوضوح</span><input type="file" accept="image/jpeg,image/png" capture="environment" onChange={(e) => setIdentityBack(e.target.files?.[0] ?? null)} required /><small>{identityBack?.name ?? 'JPG أو PNG · حتى 5MB'}</small></label></div>
-      <label className="file-drop cv-drop"><strong>السيرة الذاتية <span aria-hidden="true">*</span></strong><span>أرفق سيرتك لإكمال طلب الاعتماد</span><input type="file" required accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(e) => setCvFile(e.target.files?.[0] ?? null)} /><small>{cvFile?.name ?? 'PDF أو DOC أو DOCX · حتى 10MB'}</small></label>
-      {providerMessage && <div className={providerMessage.startsWith('تعذر') || providerMessage.startsWith('أرفق') || providerMessage.startsWith('اختر') || providerMessage.startsWith('أدخل') || providerMessage.startsWith('اكتب') ? 'inline-error' : 'success-note'} role="status">{providerMessage}</div>}
+      <div className="provider-extra-documents"><label className="file-drop cert-drop"><strong>الشهادة المهنية <span aria-hidden="true">*</span></strong><span>صورة واضحة أو نسخة PDF للشهادة</span><input type="file" required accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" onChange={(e) => setCertificateFile(e.target.files?.[0] ?? null)} /><small>{certificateFile?.name ?? 'JPG أو PNG أو PDF · حتى 5MB'}</small></label><label className="file-drop cv-drop"><strong>السيرة الذاتية <span className="optional">اختياري</span></strong><span>يمكنك إضافتها الآن أو ترك الحقل فارغًا</span><input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(e) => setCvFile(e.target.files?.[0] ?? null)} /><small>{cvFile?.name ?? 'PDF أو DOC أو DOCX · حتى 10MB'}</small></label></div>
+      {providerMessage && <div className={providerMessage.startsWith('تعذر') || providerMessage.startsWith('أرفق') || providerMessage.startsWith('اختر') || providerMessage.startsWith('أدخل') || providerMessage.startsWith('اكتب') || providerMessage.includes('الشهادة المهنية مطلوبة') ? 'inline-error' : 'success-note'} role="status">{providerMessage}</div>}
       <button className="button button-primary button-wide" disabled={busy || !specialtyOptions.length}>{busy ? 'جارٍ إرسال الملف…' : 'إرسال للمراجعة'}</button>
     </form>
   </section>
 
-  if (!providerProfile?.onboarding_completed) return <div className="provider-onboarding-overlay"><section className="provider-onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby="provider-onboarding-title"><div className="provider-onboarding-header"><span className="eyebrow">مساحة الفني · إكمال التسجيل</span><h1 id="provider-onboarding-title">خطوة واحدة قبل بدء العمل</h1><p className="muted">أكمل بياناتك وارفع المستندات مرة واحدة لإرسال ملفك إلى الإدارة للمراجعة.</p></div>{workMessage.startsWith('تعذر') && <div className="inline-error"><X size={16} />{workMessage}</div>}{onboardingForm}</section></div>
+  if (!providerProfile?.onboarding_completed) return <div className="provider-onboarding-overlay"><section className="provider-onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby="provider-onboarding-title"><div className="provider-onboarding-header"><span className="eyebrow">مساحة الفني · إكمال التسجيل</span><h1 id="provider-onboarding-title">خطوة واحدة قبل بدء العمل</h1><p className="muted">أكمل بياناتك وارفع الهوية والشهادة مرة واحدة لإرسال ملفك إلى الإدارة؛ السيرة الذاتية اختيارية.</p></div>{workMessage.startsWith('تعذر') && <div className="inline-error"><X size={16} />{workMessage}</div>}{onboardingForm}</section></div>
   if (providerSection === 'verification') return <DashboardLayout role="provider" eyebrow="مساحة مقدم الخدمة" title="ملف الاعتماد" description="تابع حالة ملفك المهني ومستنداتك الخاصة."><div className="dashboard-grid"><div className="dashboard-main"><div className="provider-banner"><div><span className="eyebrow">حالة الاعتماد</span><h2>{providerProfile.approval_status === 'approved' ? 'حسابك معتمد' : providerProfile.approval_status === 'rejected' ? 'يلزم تحديث الملف' : 'ملفك قيد المراجعة'}</h2><p>{providerProfile.approval_status === 'rejected' ? 'يمكنك تحديث الملف وإعادة إرساله للمراجعة.' : 'تم استلام بياناتك؛ لا حاجة لإرسالها مرة أخرى.'}</p></div></div></div><aside className="dashboard-side">{providerProfile.approval_status === 'rejected' ? onboardingForm : <div className="panel"><SectionTitle title="الملف محفوظ" description="بياناتك ومستنداتك محفوظة في مساحة خاصة وتظهر للإدارة فقط." /></div>}</aside></div></DashboardLayout>
 
   const total = ledger.reduce((sum, item) => sum + Number(item.amount || 0), 0)
@@ -270,85 +272,6 @@ function AdminPage() { return <AdminWorkspace /> }
 function dashboardPath(role: Role) { return role === 'admin' || role === 'sub_admin' ? '/admin/overview' : role === 'provider' ? '/provider/overview' : '/customer/overview' }
 function safeNextPath(value: string | null) { return value && value.startsWith('/') && !value.startsWith('//') ? value : null }
 
-function OAuthCallbackPage() {
-  const [params] = useSearchParams()
-  const navigate = useNavigate()
-  const [error, setError] = useState('')
-  const requestedRole = params.get('role') === 'provider' ? 'provider' : 'customer'
-  const nextPath = safeNextPath(params.get('next'))
-  useEffect(() => {
-    let active = true
-    finishOAuthSignIn(requestedRole).then((accountRole) => {
-      if (active) navigate((nextPath && (accountRole === requestedRole) ? nextPath : dashboardPath(accountRole)), { replace: true })
-    }).catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : 'تعذر إكمال الدخول بحساب Google.') })
-    return () => { active = false }
-  }, [navigate, requestedRole, nextPath])
-  return <div className="container auth-callback"><div className="panel"><span className="eyebrow">تسجيل آمن</span><h1>{error ? 'تعذر إكمال تسجيل الدخول' : 'جارٍ إكمال تسجيل الدخول…'}</h1><p className="muted">{error || 'نستعيد جلستك ونتحقق من مساحة الحساب.'}</p>{error && <Link className="button button-primary" to={requestedRole === 'provider' ? '/provider/login' : '/customer/login'}>العودة إلى تسجيل الدخول</Link>}</div></div>
-}
-
-function LoginPage({ fixedRole }: { fixedRole?: Extract<Role, 'customer' | 'provider'> }) {
-  const navigate = useNavigate()
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
-  const [role, setRole] = useState<Extract<Role, 'customer' | 'provider'>>(fixedRole ?? 'customer')
-  const [fullName, setFullName] = useState('')
-  const [phone, setPhone] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
-  const [checkingSession, setCheckingSession] = useState(true)
-  const [params] = useSearchParams()
-  const nextPath = safeNextPath(params.get('next'))
-  useEffect(() => {
-    let active = true
-    const redirectSavedSession = async () => {
-      try {
-        const auth = await getAuthState()
-        if (!auth.user) return
-        const accountRole = await getMyRole()
-        if (!active || !accountRole) return
-        const requestedRole = fixedRole ?? (params.get('role') === 'provider' ? 'provider' : 'customer')
-        navigate(nextPath && accountRole === requestedRole ? nextPath : dashboardPath(accountRole), { replace: true })
-      } catch { /* إذا تعذر فحص الجلسة، نبقي نموذج الدخول متاحًا */ }
-      finally { if (active) setCheckingSession(false) }
-    }
-    void redirectSavedSession()
-    return () => { active = false }
-  }, [fixedRole, navigate, nextPath, params])
-  useEffect(() => {
-    const nextRole = fixedRole ?? (params.get('role') === 'provider' ? 'provider' : 'customer')
-    setRole(nextRole)
-    setMode(params.get('mode') === 'signup' ? 'signup' : 'signin')
-    if (params.get('error') === 'role-missing') setError('تم الدخول لكن لم يُعيّن دور للحساب. تواصل مع إدارة المنصة لإكمال إعداد الصلاحيات.')
-  }, [fixedRole, params])
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault(); setBusy(true); setError(''); setNotice('')
-    try {
-      if (mode === 'signin') {
-        await signInAccount(email, password)
-        if (role === 'provider') await ensureProviderProfile('provider')
-        const accountRole = await getMyRole()
-        if (!accountRole) { setError('تم تسجيل الدخول، لكن لم يُعيّن دور لهذا الحساب بعد. تواصل مع إدارة المنصة.'); return }
-        navigate(nextPath && (accountRole === role) ? nextPath : dashboardPath(accountRole), { replace: true })
-      } else {
-        const result = await signUpAccount({ email, password, fullName, phone, role })
-        if (result.session) {
-          if (role === 'provider') await ensureProviderProfile('provider')
-          const accountRole = await getMyRole()
-          navigate(nextPath && (accountRole === role) ? nextPath : dashboardPath(accountRole ?? role), { replace: true })
-        } else {
-          setNotice('اكتمل إنشاء الحساب. إذا طُلب تفعيل البريد، اتبع الرابط المرسل ثم سجّل الدخول.')
-        }
-      }
-    } catch (submissionError) { setError(submissionError instanceof Error ? submissionError.message : 'تعذر إكمال العملية') }
-    finally { setBusy(false) }
-  }
-  const title = role === 'customer' ? (mode === 'signin' ? 'أهلًا بعودتك،' : 'ابدأ تجربتك،') : (mode === 'signin' ? 'مساحتك المهنية،' : 'انضم كمقدم خدمة،')
-  const subtitle = role === 'customer' ? 'تابع طلبات المنزل ومواعيدها من حساب واحد.' : 'إدارة ملفك واعتمادك والطلبات المسندة إليك.'
-  if (checkingSession) return <div className="container loading-state">جارٍ استعادة جلسة حسابك…</div>
-  return <div className={`container auth-page auth-page-${role}`}><div className="auth-card"><div className="auth-brand"><BrandMark /></div><span className="eyebrow">{role === 'customer' ? 'مساحة العميل' : 'مساحة الفني'}</span><h1>{title}<br /><span>{role === 'customer' ? (mode === 'signin' ? 'طلبك في متناولك.' : 'اطلب بثقة.') : (mode === 'signin' ? 'طلباتك في مكانها.' : 'ملفك يبدأ هنا.')}</span></h1><p className="muted">{subtitle}</p><div className="auth-switch"><button type="button" className={mode === 'signin' ? 'active' : ''} onClick={() => { setMode('signin'); setError(''); setNotice('') }}>تسجيل الدخول</button><button type="button" className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setError(''); setNotice('') }}>إنشاء حساب</button></div>{!fixedRole && <div className="role-tabs"><button type="button" className={role === 'customer' ? 'active' : ''} onClick={() => setRole('customer')}>طالب خدمة</button><button type="button" className={role === 'provider' ? 'active' : ''} onClick={() => setRole('provider')}>فني / مقدم خدمة</button></div>}<form onSubmit={submit}>{mode === 'signup' && <><label className="field-label">الاسم الكامل<input autoComplete="name" required value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="اكتب اسمك" /></label><label className="field-label">رقم الجوال<input autoComplete="tel" inputMode="tel" required value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="05xxxxxxxx" /></label></>}<label className="field-label">البريد الإلكتروني<input autoComplete="email" required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" /></label><label className="field-label">كلمة المرور<input autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} required minLength={6} type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="6 أحرف على الأقل" /></label>{error && <div className="inline-error" role="alert"><X size={16} />{error}</div>}{notice && <div className="success-note" role="status"><Check size={16} />{notice}</div>}<button className="button button-primary button-wide" disabled={busy}>{busy ? 'جارٍ التنفيذ...' : mode === 'signin' ? 'تسجيل الدخول' : 'إنشاء الحساب'} <ArrowLeft size={17} /></button></form><div className="auth-divider"><span>أو</span></div><button type="button" className="button google-button button-wide" disabled={busy} onClick={async () => { setError(''); setNotice(''); try { await signInWithGoogle(role, nextPath ?? (role === 'provider' ? '/provider' : '/book')) } catch (reason) { setError(reason instanceof Error ? reason.message : 'تعذر بدء الدخول عبر Google') } }}><span className="google-g">G</span>المتابعة بحساب Google</button><Link to="/services" className="button button-secondary button-wide">استكشف الخدمات</Link>{fixedRole && <p className="auth-role-switch">{role === 'customer' ? 'هل تقدم خدمات؟' : 'هل تطلب خدمة منزلية؟'} <Link to={role === 'customer' ? '/provider/login' : '/customer/login'}>{role === 'customer' ? 'دخول الفنيين' : 'دخول العملاء'}</Link></p>}</div><div className="auth-side"><span className="eyebrow">{role === 'customer' ? 'تجربة العميل' : 'مسار مقدم الخدمة'}</span><h2>{role === 'customer' ? <>خدمة منزلية،<br /><em>بخطوات واضحة.</em></> : <>خبرتك،<br /><em>في المسار الصحيح.</em></>}</h2><p>{role === 'customer' ? 'ابدأ بطلب واضح، تابع حالته، واحتفظ بتفاصيل الخدمة في مساحة مستقلة.' : 'أكمل بياناتك المهنية، أرسل مستنداتك السرية، وانتظر مراجعة الإدارة قبل استقبال الطلبات.'}</p><div className="auth-side-list"><Feature icon="verified" title={role === 'customer' ? 'حسابك خاص بك' : 'اعتماد قبل استقبال الطلبات'} body={role === 'customer' ? 'طلباتك وعناوينك لا تظهر إلا لحسابك.' : 'الإدارة تراجع الملف قبل تفعيل الإسناد.'} /><Feature icon="location" title={role === 'customer' ? 'موقع بإذنك' : 'معلومات مهنية منفصلة'} body={role === 'customer' ? 'اختر GPS أو أدخل العنوان يدويًا.' : 'بياناتك ومستنداتك لا تظهر للعملاء.'} /></div></div></div>
-}
 function DashboardLayout({ role, eyebrow, title, description, children }: { role: Role; eyebrow: string; title: string; description: string; children: React.ReactNode }) {
   const location = useLocation()
   const customerNav = [{ label: 'الرئيسية', icon: Gauge, to: '/customer/overview' }, { label: 'الطلبات', icon: FileText, to: '/customer/orders' }, { label: 'اطلب خدمة', icon: MapPin, to: '/book' }, { label: 'الإشعارات', icon: MessageCircle, to: '/customer/notifications' }]

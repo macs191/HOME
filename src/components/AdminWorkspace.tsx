@@ -6,6 +6,7 @@ import { AdminAccountsPanel } from './AdminAccountsPanel'
 import { addProviderLedgerEntry, assignBookingToProvider, getAdminDocumentUrl, getAdminOperations, getAdminOverview, getAdminProviderApplications, reviewProviderVerification, setProviderCommission, signOutAccount } from '../lib/supabase'
 import { MobileBottomNav } from './MobileBottomNav'
 import { NotificationsPanel } from './NotificationsPanel'
+import { InlineDocumentViewer } from './InlineDocumentViewer'
 
 type Section = 'overview' | 'operations' | 'accounts' | 'applications' | 'catalog' | 'quotes' | 'payments' | 'settings' | 'notifications'
 const navItems: { id: Section; label: string; icon: typeof Gauge }[] = [
@@ -96,8 +97,9 @@ function ProviderApplicationDocuments({ documents }: { documents: Array<{ id: st
   const [loaded, setLoaded] = useState(false)
   const [links, setLinks] = useState<Record<string, { preview: string; download: string }>>({})
   const [error, setError] = useState('')
+  const [activeDocument, setActiveDocument] = useState<{ url: string; title: string; filePath: string } | null>(null)
   const current = documents.filter((document) => document.is_current !== false)
-  const labels: Record<string, string> = { identity_front: 'وجه الهوية', identity_back: 'ظهر الهوية', national_id: 'الهوية', cv: 'السيرة الذاتية', license: 'الرخصة المهنية', certificate: 'الشهادة' }
+  const labels: Record<string, string> = { identity_front: 'وجه الهوية', identity_back: 'ظهر الهوية', national_id: 'الهوية', cv: 'السيرة الذاتية', license: 'الرخصة المهنية', certificate: 'الشهادة المهنية' }
   const toggle = async () => {
     if (open) { setOpen(false); return }
     setOpen(true)
@@ -112,5 +114,5 @@ function ProviderApplicationDocuments({ documents }: { documents: Array<{ id: st
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'تعذر فتح مستندات الفني.') }
     finally { setLoadingDocs(false) }
   }
-  return <div className="application-documents"><button type="button" className="button button-secondary button-small" aria-expanded={open} onClick={() => void toggle()}>{open ? 'إخفاء مستندات الاعتماد' : `عرض مستندات الاعتماد (${current.length})`}</button>{open && <div className="application-document-list">{loadingDocs ? <small>جارٍ إنشاء روابط آمنة للملفات…</small> : error ? <small className="inline-error">{error}</small> : current.length ? current.map((document) => <div className="application-document" key={document.id}><span>{labels[document.document_type] ?? 'مستند'}</span>{links[document.id] && <span className="application-document-links"><a href={links[document.id].preview} target="_blank" rel="noreferrer">معاينة</a><a href={links[document.id].download}>تنزيل</a></span>}</div>) : <small>لم تُرفع مستندات اعتماد لهذا الفني.</small>}</div>}</div>
+  return <div className="application-documents"><button type="button" className="button button-secondary button-small" aria-expanded={open} onClick={() => void toggle()}>{open ? 'إخفاء مستندات الاعتماد' : `عرض مستندات الاعتماد (${current.length})`}</button>{open && <div className="application-document-list">{loadingDocs ? <small>جارٍ إنشاء روابط آمنة للملفات…</small> : error ? <small className="inline-error">{error}</small> : current.length ? current.map((document) => <div className="application-document" key={document.id}><span>{labels[document.document_type] ?? 'مستند'}</span>{links[document.id] && <span className="application-document-links"><button type="button" onClick={() => setActiveDocument({ url: links[document.id].preview, title: labels[document.document_type] ?? 'مستند', filePath: document.storage_path })}>عرض داخل الصفحة</button><a href={links[document.id].download}>تنزيل</a></span>}</div>) : <small>لم تُرفع مستندات اعتماد لهذا الفني.</small>}</div>}{activeDocument && <InlineDocumentViewer {...activeDocument} onClose={() => setActiveDocument(null)} />}</div>
 }

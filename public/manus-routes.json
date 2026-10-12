@@ -91,6 +91,38 @@
     {
       "path": "/login",
       "title": "تسجيل الدخول"
+    },
+    {
+      "path": "/auth/callback",
+      "title": "التحقق من دخول Google"
+    },
+    {
+      "path": "/auth/complete-profile",
+      "title": "إكمال بيانات الحساب"
+    },
+    {
+      "path": "/customer",
+      "title": "مساحة العميل"
+    },
+    {
+      "path": "/customer/:section",
+      "title": "أقسام مساحة العميل"
+    },
+    {
+      "path": "/provider",
+      "title": "مساحة الفني"
+    },
+    {
+      "path": "/provider/:section",
+      "title": "أقسام مساحة الفني"
+    },
+    {
+      "path": "/admin",
+      "title": "لوحة الإدارة"
+    },
+    {
+      "path": "/admin/:section",
+      "title": "أقسام لوحة الإدارة"
     }
   ]
 }

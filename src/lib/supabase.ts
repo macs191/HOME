@@ -94,6 +94,13 @@ export async function getMyRole(): Promise<Role | null> {
   return (data?.role as Role | undefined) ?? null
 }
 
+export async function getMyAccountProfile() {
+  if (!supabase) return { data: null, error: new Error('خدمة الحساب غير متاحة الآن.') }
+  const { data: auth } = await supabase.auth.getUser()
+  if (!auth.user) return { data: null, error: new Error('سجّل الدخول لعرض بيانات حسابك.') }
+  return supabase.from('profiles').select('full_name,phone,city').eq('id', auth.user.id).maybeSingle()
+}
+
 export function onAuthStateChange(callback: (state: AuthState) => void) {
   if (!supabase) return { unsubscribe: () => undefined }
   const { data } = supabase.auth.onAuthStateChange((_event, session) => callback({ session, user: session?.user ?? null }))
@@ -118,16 +125,37 @@ export async function signUpAccount(input: { email: string; password: string; fu
   return data
 }
 
-export async function finishOAuthSignIn(requestedRole: Extract<Role, 'customer' | 'provider'>): Promise<Role> {
+export async function finishOAuthSignIn(): Promise<{ role: Role | null; profileComplete: boolean }> {
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.auth.getSession()
   if (error) throw new Error(authMessage(error))
   if (!data.session?.user) throw new Error('تعذر استعادة جلسة Google. أعد المحاولة من صفحة الدخول.')
-  if (requestedRole === 'provider') await ensureProviderProfile('provider')
   const role = await getMyRole()
-  if (!role) throw new Error('تعذر تجهيز صلاحيات الحساب. تواصل مع الإدارة إذا استمرت المشكلة.')
-  try { sessionStorage.removeItem('homefix-google-role') } catch { /* تجاهل تعذر التخزين */ }
-  return role
+  if (!role) return { role: null, profileComplete: false }
+  if (role !== 'customer' && role !== 'provider') return { role, profileComplete: true }
+  const profile = await getMyAccountProfile()
+  if (profile.error) throw profile.error
+  const digits = (profile.data?.phone ?? '').replace(/\D/g, '')
+  return { role, profileComplete: Boolean(profile.data?.full_name?.trim()) && digits.length >= 8 && digits.length <= 15 }
+}
+
+export async function completeGoogleProfile(input: { role: Extract<Role, 'customer' | 'provider'>; fullName: string; phone: string }) {
+  if (!supabase) throw new Error('تعذر حفظ بيانات الحساب الآن.')
+  const { data, error } = await supabase.rpc('complete_google_profile', {
+    p_role: input.role,
+    p_full_name: input.fullName.trim(),
+    p_phone: input.phone.trim(),
+  })
+  if (error) {
+    const message = error.message.toLowerCase()
+    if (message.includes('authentication_required')) throw new Error('انتهت جلسة Google. سجّل الدخول ثم حاول مرة أخرى.')
+    if (message.includes('invalid_account_role')) throw new Error('اختر عميلًا أو فنيًا للمتابعة.')
+    if (message.includes('invalid_full_name')) throw new Error('أدخل الاسم الكامل الصحيح (من حرفين إلى 160 حرفًا).')
+    if (message.includes('invalid_phone')) throw new Error('أدخل رقم جوال صحيحًا مع رمز الدولة عند الحاجة.')
+    if (message.includes('account_role_conflict')) throw new Error('هذا الحساب مرتبط بدور قائم ولا يمكن تبديله من شاشة الدخول.')
+    throw new Error(`تعذر حفظ بيانات الحساب: ${error.message}`)
+  }
+  return (data ?? input.role) as Extract<Role, 'customer' | 'provider'>
 }
 
 export async function signOutAccount() {
@@ -168,9 +196,8 @@ export async function getMyBookings() {
 
 export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provider'> = 'customer', nextPath?: string) {
   if (!supabase) throw new Error('تعذر تفعيل الدخول بحساب Google.')
-  try { sessionStorage.setItem('homefix-google-role', role) } catch { /* لا نوقف OAuth إذا منع المتصفح التخزين */ }
+  void role // يُختار الدور بعد عودة الحساب الجديد من Google.
   const callback = new URL('/auth/callback', window.location.origin)
-  callback.searchParams.set('role', role)
   if (nextPath?.startsWith('/') && !nextPath.startsWith('//')) callback.searchParams.set('next', nextPath)
   const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: callback.toString() } })
   if (error) throw new Error(authMessage(error))
@@ -237,26 +264,31 @@ function providerDocumentExtension(file: File) {
   return providerDocumentExtensionByMime[providerDocumentMime(file)] ?? ''
 }
 
-export async function submitProviderOnboarding(input: { fullName: string; yearsExperience: number; serviceDescription: string; phone: string; city: string; serviceIds: string[]; identityFront: File; identityBack: File; cv: File }) {
+export async function submitProviderOnboarding(input: { fullName: string; yearsExperience: number; serviceDescription: string; phone: string; city: string; serviceIds: string[]; identityFront: File; identityBack: File; certificate: File; cv?: File | null }) {
   if (!supabase) throw new Error('تعذر إرسال الملف الآن.')
   const userId = (await supabase.auth.getUser()).data.user?.id
   if (!userId) throw new Error('سجّل الدخول لإكمال ملفك المهني.')
   if (input.fullName.trim().length < 2 || input.fullName.trim().length > 160) throw new Error('أدخل الاسم الكامل بحروف تتراوح بين 2 و160 حرفًا.')
   if (!input.serviceIds.length) throw new Error('اختر خدمة واحدة على الأقل.')
   for (const [label, file] of [['وجه الهوية', input.identityFront], ['ظهر الهوية', input.identityBack]] as const) {
-    if (file.size > 5 * 1024 * 1024) throw new Error(`حجم ${label} يجب ألا يتجاوز 5 ميجابايت.`)
+    if (file.size === 0 || file.size > 5 * 1024 * 1024) throw new Error(`حجم ${label} يجب أن يكون أكبر من صفر ولا يتجاوز 5 ميجابايت.`)
     if (!['image/jpeg', 'image/png'].includes(providerDocumentMime(file))) throw new Error(`ارفع ${label} بصيغة JPG أو PNG؛ النوع المستلم: ${file.type || 'غير محدد'}.`)
   }
+  const certificateTypes = ['image/jpeg', 'image/png', 'application/pdf']
+  if (!input.certificate || input.certificate.size === 0 || input.certificate.size > 5 * 1024 * 1024 || !certificateTypes.includes(providerDocumentMime(input.certificate))) {
+    throw new Error('الشهادة المهنية مطلوبة بصيغة JPG أو PNG أو PDF وبحجم لا يتجاوز 5 ميجابايت.')
+  }
   const cvTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-  if (!input.cv) throw new Error('أرفق السيرة الذاتية لإكمال ملف الاعتماد.')
-  if (input.cv.size === 0 || input.cv.size > 10 * 1024 * 1024 || !cvTypes.includes(providerDocumentMime(input.cv))) throw new Error('السيرة الذاتية: PDF أو DOC أو DOCX وبحجم من 1 بايت إلى 10 ميجابايت.')
+  if (input.cv && (input.cv.size === 0 || input.cv.size > 10 * 1024 * 1024 || !cvTypes.includes(providerDocumentMime(input.cv)))) {
+    throw new Error('السيرة الذاتية اختيارية؛ إذا أرفقتها فلتكن PDF أو DOC أو DOCX وبحجم لا يتجاوز 10 ميجابايت.')
+  }
   const upload = async (bucket: string, file: File, prefix: string) => {
     const extension = providerDocumentExtension(file)
-    if (!extension) throw new Error('تعذر قراءة امتداد الملف. أعد حفظه بصيغة JPG أو PNG أو PDF أو DOC أو DOCX ثم اختره مجددًا.')
+    if (!extension) throw new Error('تعذر قراءة امتداد الملف. اختر JPG أو PNG أو PDF، أو صيغة السيرة المدعومة.')
     const mimeType = providerDocumentMime(file)
     const path = `${userId}/${prefix}-${crypto.randomUUID()}.${extension}`
     const { error } = await supabase!.storage.from(bucket).upload(path, file, { contentType: mimeType, upsert: false })
-    if (error) throw new Error(`تعذر رفع المستند إلى مساحة ${bucket}: ${error.message}. تحقق من اتصالك وصلاحية الحساب ونوع الملف ثم أعد المحاولة.`)
+    if (error) throw new Error(`تعذر رفع المستند إلى مساحة ${bucket}: ${error.message}. تحقق من الاتصال والصلاحية ونوع الملف ثم أعد المحاولة.`)
     return path
   }
   const uploaded: { bucket: string; path: string }[] = []
@@ -265,19 +297,23 @@ export async function submitProviderOnboarding(input: { fullName: string; yearsE
     uploaded.push({ bucket: 'identity-documents', path: front })
     const back = await upload('identity-documents', input.identityBack, 'identity-back')
     uploaded.push({ bucket: 'identity-documents', path: back })
-    const cv = await upload('provider-cvs', input.cv, 'cv')
-    uploaded.push({ bucket: 'provider-cvs', path: cv })
-    const { error } = await supabase.rpc('provider_submit_onboarding', {
+    const certificate = await upload('identity-documents', input.certificate, 'certificate')
+    uploaded.push({ bucket: 'identity-documents', path: certificate })
+    const cv = input.cv ? await upload('provider-cvs', input.cv, 'cv') : null
+    if (cv) uploaded.push({ bucket: 'provider-cvs', path: cv })
+    const { error } = await supabase.rpc('provider_submit_onboarding_with_certificate', {
       p_full_name: input.fullName.trim(), p_years: input.yearsExperience, p_description: input.serviceDescription.trim(), p_phone: input.phone.trim(), p_city: input.city.trim(),
-      p_identity_front_path: front, p_identity_back_path: back, p_cv_path: cv, p_service_ids: input.serviceIds,
+      p_identity_front_path: front, p_identity_back_path: back, p_certificate_path: certificate, p_cv_path: cv, p_service_ids: input.serviceIds,
     })
     if (error) {
       const code = error.message.toLowerCase()
       if (code.includes('provider_required') || code.includes('authentication_required')) throw new Error('انتهت جلسة الدخول أو أن الحساب ليس حساب فني. سجّل الدخول من صفحة الفنيين ثم أعد المحاولة.')
       if (code.includes('invalid_full_name')) throw new Error('أدخل الاسم الكامل بحروف تتراوح بين 2 و160 حرفًا.')
       if (code.includes('provider_onboarding_already_submitted')) throw new Error('تم إرسال ملفك بالفعل وهو قيد المراجعة أو معتمد؛ لا حاجة لإعادة الإرسال.')
-      if (code.includes('identity_front_document_missing') || code.includes('identity_back_document_missing') || code.includes('cv_document_missing')) throw new Error('لم يصل أحد الملفات كاملًا. اختر ملفات الهوية والسيرة مجددًا ثم أعد الإرسال.')
+      if (code.includes('identity_front_document_missing') || code.includes('identity_back_document_missing') || code.includes('certificate_document_missing')) throw new Error('لم يصل أحد ملفات الهوية أو الشهادة كاملًا. أعد اختيار الملفات ثم أرسلها مجددًا.')
+      if (code.includes('cv_document_missing')) throw new Error('لم يصل ملف السيرة الاختياري كاملًا. أعد اختياره أو أرسِل الطلب من دونه.')
       if (code.includes('invalid_identity_front_path') || code.includes('invalid_identity_back_path')) throw new Error('تعذر التحقق من مسار صورة الهوية. أعد اختيار صور JPG أو PNG ثم أرسلها مجددًا.')
+      if (code.includes('invalid_certificate_path')) throw new Error('تعذر التحقق من الشهادة. أعد اختيار JPG أو PNG أو PDF ثم أرسلها مجددًا.')
       if (code.includes('invalid_cv_path')) throw new Error('تعذر التحقق من ملف السيرة؛ أعد اختياره بصيغة PDF أو DOC أو DOCX.')
       if (code.includes('at_least_one_service_required')) throw new Error('اختر خدمة واحدة على الأقل.')
       if (code.includes('service_unavailable')) throw new Error('تغيّرت قائمة الخدمات. حدّث الصفحة واختر الخدمات المتاحة.')
@@ -285,6 +321,7 @@ export async function submitProviderOnboarding(input: { fullName: string; yearsE
       if (code.includes('invalid_service_description')) throw new Error('أضف نبذة مهنية لا تقل عن 10 أحرف.')
       if (code.includes('invalid_phone')) throw new Error('أدخل رقم جوال صحيحًا.')
       if (code.includes('invalid_city')) throw new Error('أدخل مدينة تقديم الخدمة.')
+      if (code.includes('professional_certificate_required')) throw new Error('الشهادة المهنية مطلوبة لإكمال اعتماد الفني.')
       console.error('[provider-onboarding] save failed', { code: error.code, message: error.message, details: error.details, hint: error.hint })
       throw new Error(`تعذر حفظ الملف: ${error.message || 'خطأ غير معروف'}${error.code ? ` (رمز ${error.code})` : ''}`)
     }
@@ -370,7 +407,7 @@ export async function getAdminDocumentUrl(documentType: string, path: string, do
   if (!supabase) throw new Error('تعذر فتح المستند الآن.')
   const bucket = documentType === 'cv' ? 'provider-cvs' : 'identity-documents'
   const extension = path.split('.').pop()?.toLowerCase()
-  const typeLabel = documentType === 'cv' ? 'السيرة-الذاتية' : documentType === 'identity_front' ? 'الهوية-الوجه-الأمامي' : 'الهوية-الوجه-الخلفي'
+  const typeLabel = documentType === 'cv' ? 'السيرة-الذاتية' : documentType === 'certificate' ? 'الشهادة-المهنية' : documentType === 'identity_front' ? 'الهوية-الوجه-الأمامي' : documentType === 'identity_back' ? 'الهوية-الوجه-الخلفي' : 'مستند-اعتماد'
   const filename = `${typeLabel}${extension && extension !== path ? `.${extension}` : ''}`
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 300, download ? { download: filename } : {})
   if (error) throw new Error('المستند غير متاح أو لا تملك صلاحية عرضه.')
