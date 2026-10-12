@@ -11,7 +11,7 @@ export function Shell({ children, theme, onThemeChange }: { children: ReactNode;
   const [noticeOpen, setNoticeOpen] = useState(false)
   const location = useLocation()
   useEffect(() => setMobileOpen(false), [location.pathname])
-  const nav = [{ to: '/', label: 'الرئيسية' }, { to: '/services', label: 'الخدمات' }, { to: '/book', label: 'اطلب خدمة' }, { to: '/customer', label: 'مساحة العميل' }]
+  const nav = [{ to: '/', label: 'الرئيسية' }, { to: '/services', label: 'الخدمات' }, { to: '/book', label: 'اطلب خدمة' }, { to: '/login?role=customer', label: 'دخول العملاء' }, { to: '/login?role=provider', label: 'دخول الفنيين' }]
   return <div className="app-shell">
     <header className="topbar">
       <div className="topbar-inner">
@@ -19,7 +19,7 @@ export function Shell({ children, theme, onThemeChange }: { children: ReactNode;
         <Link to="/" className="brand-link"><BrandMark /></Link>
         <nav className={`main-nav ${mobileOpen ? 'is-open' : ''}`}>{nav.map((item) => <NavLink key={item.to} to={item.to} className={({ isActive }) => isActive ? 'active' : ''}>{item.label}</NavLink>)}</nav>
         <div className="topbar-actions">
-          <button className="icon-button hide-mobile" aria-label="بحث"><Search size={18} /></button>
+          <Link className="icon-button hide-mobile" aria-label="بحث" to="/services"><Search size={18} /></Link>
           <div className="notice-wrap"><button className="icon-button" onClick={() => setNoticeOpen((value) => !value)} aria-label="الإشعارات"><Bell size={18} /><span className="notice-dot" /></button>{noticeOpen && <div className="notice-popover"><div className="popover-head"><strong>الإشعارات</strong><span className="soft-label">{notices.length} جديد</span></div>{notices.map((notice) => <div className="notice-item" key={notice.id}><span className="notice-bullet" /><div><strong>{notice.title}</strong><p>{notice.body}</p><small>{notice.time}</small></div></div>)}<Link to="/customer" className="popover-link">عرض مساحة العميل</Link></div>}</div>
           <button className="icon-button" onClick={onThemeChange} aria-label="تغيير المظهر">{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button>
           <Link to="/login" className="login-link hide-mobile">تسجيل الدخول <ChevronDown size={14} /></Link>

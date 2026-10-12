@@ -111,14 +111,14 @@ export async function startPayment(bookingId: string) {
   if (paymentError) throw new Error(paymentError.message || 'الخدمة لم تصبح جاهزة للدفع بعد')
   const { data, error } = await supabase.functions.invoke('create-checkout-session', { body: { payment_id: payment.id } })
   if (error || !data?.url) throw new Error(data?.message || 'بوابة الدفع غير مهيأة بعد. أضف مفاتيح مزود الدفع من إعدادات Supabase.')
-  window.open(data.url, '_blank', 'noopener,noreferrer')
+  window.location.assign(data.url)
   return data.url as string
 }
 
 
 export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provider'> = 'customer') {
   if (!supabase) throw new Error('أضف إعدادات Supabase أولًا لتفعيل الدخول بحساب Google.')
-  localStorage.setItem('homefix-google-role', role)
+  try { sessionStorage.setItem('homefix-google-role', role) } catch { /* لا نوقف OAuth إذا منع المتصفح التخزين */ }
   const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/${role === 'provider' ? 'provider' : 'customer'}` } })
   if (error) throw new Error(authMessage(error))
 }
@@ -135,9 +135,9 @@ export async function submitProviderVerification(input: { yearsExperience: numbe
   const { error: uploadError } = await supabase.storage.from('identity-documents').upload(path, input.identityFile, { contentType: input.identityFile.type, upsert: false })
   if (uploadError) throw new Error(uploadError.message || 'تعذر رفع صورة الهوية.')
   const { error: profileError } = await supabase.from('provider_profiles').update({ years_experience: input.yearsExperience, service_description: input.serviceDescription.trim(), national_id_last4: input.nationalIdLast4.slice(-4), onboarding_completed: true }).eq('user_id', userId)
-  if (profileError) throw new Error(profileError.message || 'تعذر حفظ بيانات الفني.')
+  if (profileError) { await supabase.storage.from('identity-documents').remove([path]); throw new Error(profileError.message || 'تعذر حفظ بيانات الفني.') }
   const { error: documentError } = await supabase.from('provider_documents').insert({ provider_id: userId, document_type: 'national_id', storage_path: path, status: 'pending' })
-  if (documentError) throw new Error(documentError.message || 'تعذر تسجيل مستند الهوية للمراجعة.')
+  if (documentError) { await supabase.storage.from('identity-documents').remove([path]); throw new Error(documentError.message || 'تعذر تسجيل مستند الهوية للمراجعة.') }
 }
 
 export async function getProviderWorkQueue() {
@@ -192,8 +192,10 @@ export async function addProviderLedgerEntry(providerId: string, bookingId: stri
 
 export async function ensureProviderProfile() {
   if (!supabase) return
-  if (localStorage.getItem('homefix-google-role') !== 'provider') return
+  let requestedRole: string | null = null
+  try { requestedRole = sessionStorage.getItem('homefix-google-role') } catch { return }
+  if (requestedRole !== 'provider') return
   const { error } = await supabase.rpc('ensure_provider_profile')
   if (error) throw new Error(error.message || 'تعذر تجهيز ملف الفني.')
-  localStorage.removeItem('homefix-google-role')
+  try { sessionStorage.removeItem('homefix-google-role') } catch { /* تجاهل تعذر التخزين */ }
 }
