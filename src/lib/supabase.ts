@@ -234,10 +234,11 @@ function providerDocumentExtension(file: File) {
   return providerDocumentExtensionByMime[providerDocumentMime(file)] ?? ''
 }
 
-export async function submitProviderOnboarding(input: { yearsExperience: number; serviceDescription: string; phone: string; city: string; serviceIds: string[]; identityFront: File; identityBack: File; cv: File }) {
+export async function submitProviderOnboarding(input: { fullName: string; yearsExperience: number; serviceDescription: string; phone: string; city: string; serviceIds: string[]; identityFront: File; identityBack: File; cv: File }) {
   if (!supabase) throw new Error('تعذر إرسال الملف الآن.')
   const userId = (await supabase.auth.getUser()).data.user?.id
   if (!userId) throw new Error('سجّل الدخول لإكمال ملفك المهني.')
+  if (input.fullName.trim().length < 2 || input.fullName.trim().length > 160) throw new Error('أدخل الاسم الكامل بحروف تتراوح بين 2 و160 حرفًا.')
   if (!input.serviceIds.length) throw new Error('اختر خدمة واحدة على الأقل.')
   for (const [label, file] of [['وجه الهوية', input.identityFront], ['ظهر الهوية', input.identityBack]] as const) {
     if (file.size > 5 * 1024 * 1024) throw new Error(`حجم ${label} يجب ألا يتجاوز 5 ميجابايت.`)
@@ -264,13 +265,16 @@ export async function submitProviderOnboarding(input: { yearsExperience: number;
     const cv = await upload('provider-cvs', input.cv, 'cv')
     uploaded.push({ bucket: 'provider-cvs', path: cv })
     const { error } = await supabase.rpc('provider_submit_onboarding', {
-      p_years: input.yearsExperience, p_description: input.serviceDescription.trim(), p_phone: input.phone.trim(), p_city: input.city.trim(),
+      p_full_name: input.fullName.trim(), p_years: input.yearsExperience, p_description: input.serviceDescription.trim(), p_phone: input.phone.trim(), p_city: input.city.trim(),
       p_identity_front_path: front, p_identity_back_path: back, p_cv_path: cv, p_service_ids: input.serviceIds,
     })
     if (error) {
       const code = error.message.toLowerCase()
+      if (code.includes('provider_required') || code.includes('authentication_required')) throw new Error('انتهت جلسة الدخول أو أن الحساب ليس حساب فني. سجّل الدخول من صفحة الفنيين ثم أعد المحاولة.')
+      if (code.includes('invalid_full_name')) throw new Error('أدخل الاسم الكامل بحروف تتراوح بين 2 و160 حرفًا.')
       if (code.includes('provider_onboarding_already_submitted')) throw new Error('تم إرسال ملفك بالفعل وهو قيد المراجعة أو معتمد؛ لا حاجة لإعادة الإرسال.')
       if (code.includes('identity_front_document_missing') || code.includes('identity_back_document_missing') || code.includes('cv_document_missing')) throw new Error('لم يصل أحد الملفات كاملًا. اختر ملفات الهوية والسيرة مجددًا ثم أعد الإرسال.')
+      if (code.includes('invalid_identity_front_path') || code.includes('invalid_identity_back_path')) throw new Error('تعذر التحقق من مسار صورة الهوية. أعد اختيار صور JPG أو PNG ثم أرسلها مجددًا.')
       if (code.includes('invalid_cv_path')) throw new Error('تعذر التحقق من ملف السيرة؛ أعد اختياره بصيغة PDF أو DOC أو DOCX.')
       if (code.includes('at_least_one_service_required')) throw new Error('اختر خدمة واحدة على الأقل.')
       if (code.includes('service_unavailable')) throw new Error('تغيّرت قائمة الخدمات. حدّث الصفحة واختر الخدمات المتاحة.')
@@ -278,7 +282,8 @@ export async function submitProviderOnboarding(input: { yearsExperience: number;
       if (code.includes('invalid_service_description')) throw new Error('أضف نبذة مهنية لا تقل عن 10 أحرف.')
       if (code.includes('invalid_phone')) throw new Error('أدخل رقم جوال صحيحًا.')
       if (code.includes('invalid_city')) throw new Error('أدخل مدينة تقديم الخدمة.')
-      throw new Error('تعذر حفظ الملف. راجع البيانات وحاول مرة أخرى.')
+      console.error('[provider-onboarding] save failed', { code: error.code, message: error.message, details: error.details, hint: error.hint })
+      throw new Error(`تعذر حفظ الملف: ${error.message || 'خطأ غير معروف'}${error.code ? ` (رمز ${error.code})` : ''}`)
     }
   } catch (error) {
     await Promise.all(uploaded.map(({ bucket, path }) => supabase!.storage.from(bucket).remove([path])))
