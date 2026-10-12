@@ -190,3 +190,67 @@ img, video, iframe, canvas { max-width: 100%; }
   .topbar-actions { gap: 3px; }
   .brand-name { font-size: 14px; }
 }
+
+
+/* The mobile hamburger must expose a real, touch-friendly site menu. */
+@media (max-width: 760px) {
+  .topbar-inner { position: relative; }
+  .mobile-menu { display: grid; flex: 0 0 38px; }
+  .main-nav.is-open {
+    position: absolute; top: calc(100% + 8px); right: 0; left: 0; z-index: 40;
+    display: flex; flex-direction: column; align-items: stretch; gap: 3px;
+    max-height: calc(100dvh - 88px); overflow-y: auto; overscroll-behavior: contain;
+    margin: 0; padding: 8px; border: 1px solid var(--line); border-radius: 16px;
+    background: var(--surface); box-shadow: 0 18px 45px rgba(13, 27, 42, .18);
+  }
+  .main-nav.is-open a,
+  .main-nav-install {
+    display: flex; align-items: center; gap: 11px; width: 100%; min-height: 46px;
+    padding: 10px 12px; border-radius: 10px; color: var(--ink); text-align: right;
+    font-size: 14px; font-weight: 700;
+  }
+  .main-nav.is-open a::after { display: none; }
+  .main-nav.is-open a:hover,
+  .main-nav.is-open a.active,
+  .main-nav-install:hover { background: var(--surface-2); }
+  .main-nav-install { border: 0; background: transparent; cursor: pointer; font: inherit; }
+  .main-nav-install svg { color: var(--teal-dark); flex: 0 0 auto; }
+  .main-nav-install:disabled { color: var(--muted); cursor: default; }
+}
+
+.install-guide-overlay {
+  position: fixed; inset: 0; z-index: 120; display: grid; place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  background: rgba(8, 18, 28, .68); backdrop-filter: blur(6px);
+}
+.install-guide-dialog {
+  position: relative; width: min(460px, 100%); max-height: 90dvh; overflow: auto;
+  padding: 25px; border: 1px solid var(--line); border-radius: 22px;
+  background: var(--surface); color: var(--ink); box-shadow: 0 24px 70px rgba(0, 0, 0, .25);
+  direction: rtl;
+}
+.install-guide-close { position: absolute; top: 12px; left: 12px; }
+.install-guide-icon {
+  display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 15px;
+  border-radius: 15px; background: #dff9f5; color: var(--teal-dark);
+}
+.install-guide-dialog h2 { margin: 0 30px 8px 0; font-size: 22px; line-height: 1.35; }
+.install-guide-dialog p { font-size: 13px; line-height: 1.8; margin-bottom: 12px; }
+.install-guide-dialog ol { display: grid; gap: 9px; padding-right: 22px; margin: 0 0 20px; font-size: 13px; line-height: 1.7; }
+body:has(.install-guide-overlay) { overflow: hidden; }
+@media (max-width: 480px) {
+  .install-guide-dialog { padding: 20px 16px; border-radius: 18px; }
+  .install-guide-dialog h2 { font-size: 20px; }
+}
+
+
+.policy-check { cursor: pointer; align-items: flex-start; gap: 10px; }
+.policy-check input[type="checkbox"] { width: 18px; height: 18px; flex: 0 0 18px; margin: 2px 0 0; accent-color: var(--teal-dark); cursor: pointer; }
+.policy-check span { line-height: 1.8; }
+.sort-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 38px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 11px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.sort-button:hover { background: var(--surface-2); }
+.sort-button[aria-pressed="true"] { border-color: var(--teal-dark); color: var(--teal-dark); }

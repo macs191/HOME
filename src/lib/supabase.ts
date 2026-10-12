@@ -134,12 +134,13 @@ export async function signOutAccount() {
   if (supabase) await supabase.auth.signOut()
 }
 
-export async function createBookingFromDraft(draft: BookingDraft, serviceSlug: string) {
+export async function createBookingFromDraft(draft: BookingDraft, serviceSlug: string, policyAccepted = false) {
+  if (!policyAccepted) throw new Error('يرجى تأكيد الموافقة على سياسة الطلب قبل الإرسال.')
   if (!supabase) throw new Error('تعذر إنشاء الطلب الآن. حاول مرة أخرى لاحقًا.')
   const { data: service, error: serviceError } = await supabase.from('services').select('id').eq('slug', serviceSlug).eq('is_active', true).maybeSingle()
   if (serviceError) throw serviceError
   if (!service) throw new Error('الخدمة غير متاحة حاليًا')
-  const { data, error } = await supabase.rpc('create_booking', {
+  const { data, error } = await supabase.rpc('create_booking_with_consent', {
     p_service_id: service.id,
     p_city: draft.city,
     p_district: draft.district,
@@ -152,6 +153,8 @@ export async function createBookingFromDraft(draft: BookingDraft, serviceSlug: s
     p_urgency: draft.urgency,
     p_scheduled_date: draft.scheduledDate || null,
     p_scheduled_slot: draft.scheduledSlot || null,
+    p_policy_accepted: policyAccepted,
+    p_policy_version: 'home-booking-terms-v1',
   })
   if (error) throw new Error(error.message || 'تعذر إنشاء الطلب')
   return { mode: 'live' as const, data }

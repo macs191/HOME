@@ -10,3 +10,6 @@ dist
 *.key
 *.pem
 identity-uploads/
+
+# Supabase CLI cache and local state
+supabase/.temp/
