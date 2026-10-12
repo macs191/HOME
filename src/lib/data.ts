@@ -1,34 +1,40 @@
 import type { Service, ServiceCategory } from '../types'
 
+// Local fallback catalog. IDs intentionally match Supabase service/category slugs.
 export const categories: ServiceCategory[] = [
   { id: 'plumbing', name: 'السباكة', description: 'تسريبات، انسدادات وإصلاحات المياه', icon: 'droplets', color: '#2bb8aa', featured: true },
-  { id: 'electricity', name: 'الكهرباء', description: 'أعطال وتمديدات وفحص آمن', icon: 'zap', color: '#f3b84b', featured: true },
-  { id: 'ac', name: 'التكييف والتبريد', description: 'تنظيف وصيانة وتركيب المكيفات', icon: 'wind', color: '#75aee8', featured: true },
-  { id: 'cleaning', name: 'تنظيف المنازل', description: 'تنظيف دوري وعميق للمساحات', icon: 'sparkles', color: '#c78ce0', featured: true },
-  { id: 'appliances', name: 'صيانة الأجهزة', description: 'غسالات، ثلاجات وأجهزة منزلية', icon: 'refrigerator', color: '#e58567' },
-  { id: 'carpentry', name: 'النجارة', description: 'أبواب، خزائن وإصلاحات خشبية', icon: 'hammer', color: '#c58a52' },
-  { id: 'paint', name: 'الدهانات', description: 'تجديد الجدران بلمسة احترافية', icon: 'paintbrush', color: '#ea8eae' },
-  { id: 'moving', name: 'نقل الأثاث', description: 'فك وتغليف ونقل آمن', icon: 'truck', color: '#7892d8' },
-  { id: 'assembly', name: 'تركيب الأثاث', description: 'تركيب احترافي في مكانك', icon: 'box', color: '#d5a657' },
-  { id: 'pest', name: 'مكافحة الحشرات', description: 'حلول آمنة للمنزل والمنشأة', icon: 'bug', color: '#82b77d' },
-  { id: 'locks', name: 'الأبواب والأقفال', description: 'فتح، إصلاح واستبدال الأقفال', icon: 'key-round', color: '#9b9bb5' },
-  { id: 'general', name: 'الصيانة العامة', description: 'حلول يومية متنوعة للمنزل', icon: 'wrench', color: '#5bb4c8' },
+  { id: 'electrical', name: 'الكهرباء', description: 'أعطال وتمديدات وفحص آمن', icon: 'zap', color: '#f3b84b', featured: true },
+  { id: 'ac', name: 'التكييف', description: 'صيانة وتنظيف المكيفات', icon: 'wind', color: '#75aee8', featured: true },
+  { id: 'cleaning', name: 'التنظيف', description: 'تنظيف عميق للمنازل', icon: 'sparkles', color: '#c78ce0', featured: true },
+  { id: 'appliance', name: 'صيانة الأجهزة', description: 'إصلاح الأجهزة المنزلية', icon: 'refrigerator', color: '#e58567' },
+  { id: 'carpentry', name: 'النجارة', description: 'أبواب وأثاث وإصلاحات خشبية', icon: 'hammer', color: '#c58a52' },
+  { id: 'painting', name: 'الدهانات', description: 'دهان وتجديد الغرف', icon: 'paintbrush', color: '#ea8eae' },
+  { id: 'moving', name: 'نقل وتركيب', description: 'نقل وتركيب الأثاث', icon: 'truck', color: '#7892d8' },
+  { id: 'pest-control', name: 'مكافحة الحشرات', description: 'حلول آمنة لمكافحة الحشرات', icon: 'bug', color: '#82b77d' },
+  { id: 'locks', name: 'الأبواب والأقفال', description: 'فتح وتركيب وإصلاح الأقفال', icon: 'key-round', color: '#9b9bb5' },
+  { id: 'general', name: 'الصيانة العامة', description: 'خدمات منزلية متنوعة', icon: 'wrench', color: '#5bb4c8' },
 ]
 
 export const services: Service[] = [
-  { id: 'leak', categoryId: 'plumbing', name: 'كشف وإصلاح تسريب مياه', shortDescription: 'فحص مصدر التسريب ومعالجته بأقل تدخل', description: 'زيارة فنية لفحص التسريب الظاهر أو المخفي وتحديد الحل المناسب قبل بدء العمل.', duration: '60–120 دقيقة', priceLabel: 'سعر يحدده الفني بعد المعاينة', featured: true },
-  { id: 'drain', categoryId: 'plumbing', name: 'تسليك مجاري وأحواض', shortDescription: 'حل الانسدادات المنزلية بسرعة', description: 'تسليك الأحواض والمصارف مع توضيح سبب الانسداد وتوصيات الوقاية.', duration: '45–90 دقيقة', priceLabel: 'سعر يبدأ من 120 ر.س', featured: true },
-  { id: 'ac-clean', categoryId: 'ac', name: 'تنظيف وصيانة مكيف سبليت', shortDescription: 'تنظيف الفلاتر وفحص الأداء', description: 'تنظيف مكونات المكيف وفحص التبريد والتصريف وفق حالة الجهاز.', duration: '60 دقيقة', priceLabel: 'سعر يبدأ من 100 ر.س', featured: true },
-  { id: 'electric-fault', categoryId: 'electricity', name: 'فحص عطل كهربائي', shortDescription: 'تشخيص العطل قبل الإصلاح', description: 'فحص آمن للدوائر والمفاتيح وتحديد نطاق الإصلاح المطلوب.', duration: '60–90 دقيقة', priceLabel: 'سعر يحدده الفني بعد المعاينة' },
-  { id: 'deep-clean', categoryId: 'cleaning', name: 'تنظيف عميق للمنزل', shortDescription: 'تنظيف شامل للمساحات الأساسية', description: 'خدمة تنظيف عميق قابلة للتخصيص حسب مساحة المنزل وعدد الغرف.', duration: '3–6 ساعات', priceLabel: 'احصل على عرض سعر' },
-  { id: 'washer', categoryId: 'appliances', name: 'صيانة غسالة', shortDescription: 'تشخيص وصيانة أعطال الغسالات', description: 'فحص الجهاز وتحديد القطعة أو الإصلاح المطلوب قبل التنفيذ.', duration: '60–120 دقيقة', priceLabel: 'سعر يحدده الفني بعد المعاينة' },
+  { id: 'leak', categoryId: 'plumbing', name: 'إصلاح تسريب مياه', shortDescription: 'فحص التسريب وتحديد مصدره والحل المناسب.', description: 'زيارة فنية لفحص التسريب الظاهر أو المخفي وتحديد الحل المناسب قبل بدء العمل.', duration: '', priceLabel: 'عرض سعر', featured: true },
+  { id: 'drain', categoryId: 'plumbing', name: 'تسليك مجاري', shortDescription: 'معالجة انسداد الأحواض والمصارف.', description: 'تسليك الأحواض والمصارف مع توضيح سبب الانسداد وتوصيات الوقاية.', duration: '', priceLabel: 'عرض سعر', featured: true },
+  { id: 'electrical-fault', categoryId: 'electrical', name: 'إصلاح عطل كهربائي', shortDescription: 'تشخيص العطل قبل بدء الإصلاح.', description: 'فحص آمن للدوائر والمفاتيح وتحديد نطاق الإصلاح المطلوب.', duration: '', priceLabel: 'عرض سعر', featured: true },
+  { id: 'lighting', categoryId: 'electrical', name: 'تركيب إضاءة', shortDescription: 'تركيب وحدات الإضاءة المنزلية.', description: 'تركيب وحدات الإضاءة والتحقق من سلامة التوصيلات.', duration: '', priceLabel: 'عرض سعر' },
+  { id: 'ac-maintenance', categoryId: 'ac', name: 'صيانة مكيف', shortDescription: 'فحص وتنظيف وصيانة المكيف.', description: 'فحص أداء المكيف والتصريف وتنظيف الأجزاء بحسب حالته.', duration: '', priceLabel: 'عرض سعر', featured: true },
+  { id: 'deep-cleaning', categoryId: 'cleaning', name: 'تنظيف عميق', shortDescription: 'تنظيف شامل للمساحات الأساسية.', description: 'خدمة تنظيف عميق قابلة للتخصيص حسب مساحة المنزل.', duration: '', priceLabel: 'عرض سعر', featured: true },
+  { id: 'appliance-repair', categoryId: 'appliance', name: 'صيانة جهاز منزلي', shortDescription: 'تشخيص وإصلاح الأجهزة المنزلية.', description: 'فحص الجهاز وتحديد العطل والحل المناسب قبل التنفيذ.', duration: '', priceLabel: 'عرض سعر' },
+  { id: 'carpentry', categoryId: 'carpentry', name: 'إصلاح نجارة', shortDescription: 'إصلاح الأبواب والأثاث الخشبي.', description: 'أعمال النجارة المنزلية والإصلاحات الخشبية.', duration: '', priceLabel: 'عرض سعر' },
+  { id: 'painting', categoryId: 'painting', name: 'دهان غرفة', shortDescription: 'دهان وتجديد غرفة حسب الطلب.', description: 'تجهيز السطح وتنفيذ الدهان بعد تحديد المساحة والمواد.', duration: '', priceLabel: 'عرض سعر' },
+  { id: 'moving', categoryId: 'moving', name: 'نقل وتركيب أثاث', shortDescription: 'فك ونقل وتركيب الأثاث المنزلي.', description: 'تنسيق نقل وتركيب الأثاث بحسب العنوان وحجم المنقولات.', duration: '', priceLabel: 'عرض سعر' },
+  { id: 'pest-control', categoryId: 'pest-control', name: 'مكافحة حشرات', shortDescription: 'معالجة آمنة لمشكلة الحشرات.', description: 'تحديد نوع المشكلة واختيار المعالجة المناسبة للموقع.', duration: '', priceLabel: 'عرض سعر' },
+  { id: 'locksmith', categoryId: 'locks', name: 'فتح أو تركيب قفل', shortDescription: 'خدمات فتح الأقفال وتركيبها.', description: 'فحص القفل وتقديم خدمة الفتح أو الاستبدال أو التركيب.', duration: '', priceLabel: 'عرض سعر' },
 ]
 
-export const getCategory = (id?: string) => categories.find((category) => category.id === id)
-export const getService = (id?: string) => services.find((service) => service.id === id)
+export const getCategory = (id?: string, source: ServiceCategory[] = categories) => source.find((category) => category.id === id)
+export const getService = (id?: string, source: Service[] = services) => source.find((service) => service.id === id)
 
 export const stats = [
-  { value: '12', label: 'قسم خدمة' },
-  { value: '24/7', label: 'استقبال الطلبات' },
+  { value: '12', label: 'خدمة نشطة في الكتالوج' },
+  { value: '11', label: 'قسمًا في المنصة' },
   { value: '0', label: 'تقييمات مختلقة' },
 ]

@@ -17,6 +17,8 @@ export type Service = {
   description: string
   duration: string
   priceLabel: string
+  pricingType?: 'fixed' | 'quote' | 'provider_quote'
+  basePrice?: number | null
   featured?: boolean
 }
 
