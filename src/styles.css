@@ -133,3 +133,6 @@ html[data-theme="light"] .quick-action,html[data-theme="light"] .booking-row { b
   .dashboard-page:not(.admin-workspace) .dashboard-nav{padding:7px 10px}
   .notification-preferences .button{flex:1 1 170px}
 }
+
+.application-documents{display:grid;gap:7px;margin-top:10px}.application-document-list{display:grid;gap:6px;padding:9px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}.application-document{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px}.application-document-links{display:flex;gap:10px}.application-document-links a{color:var(--teal-dark);font-weight:700;text-decoration:underline}.application-bio{font-size:11px;line-height:1.6;margin:5px 0;color:var(--muted);overflow-wrap:anywhere}@media(max-width:600px){.application-document{align-items:flex-start;flex-direction:column}.application-document-links{width:100%;justify-content:space-between}}
+.account-detail-actions{flex-wrap:wrap;justify-content:flex-end}.account-detail-actions .button{font-size:10px}@media(max-width:760px){.account-detail-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.account-detail-actions .button,.account-detail-actions .icon-button{width:100%;justify-content:center}}

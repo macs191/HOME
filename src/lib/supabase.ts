@@ -173,21 +173,6 @@ export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provide
   if (error) throw new Error(authMessage(error))
 }
 
-export async function submitProviderVerification(input: { yearsExperience: number; serviceDescription: string; nationalIdLast4: string; identityFile: File }) {
-  if (!supabase) throw new Error('تعذر تفعيل رفع مستند الهوية.')
-  const { data: sessionData } = await supabase.auth.getSession()
-  const userId = sessionData.session?.user.id
-  if (!userId) throw new Error('سجّل الدخول قبل إرسال ملف الفني.')
-  if (input.identityFile.size > 5 * 1024 * 1024) throw new Error('حجم صورة الهوية يجب ألا يتجاوز 5 ميجابايت.')
-  if (!['image/jpeg', 'image/png', 'application/pdf'].includes(input.identityFile.type)) throw new Error('ارفع صورة JPG أو PNG أو ملف PDF فقط.')
-  const safeName = input.identityFile.name.replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase()
-  const path = `${userId}/${crypto.randomUUID()}-${safeName}`
-  const { error: uploadError } = await supabase.storage.from('identity-documents').upload(path, input.identityFile, { contentType: input.identityFile.type, upsert: false })
-  if (uploadError) throw new Error(uploadError.message || 'تعذر رفع صورة الهوية.')
-  const { error: profileError } = await supabase.rpc('provider_submit_verification', { p_years: input.yearsExperience, p_description: input.serviceDescription.trim(), p_last4: input.nationalIdLast4.slice(-4), p_storage_path: path })
-  if (profileError) { await supabase.storage.from('identity-documents').remove([path]); throw new Error(profileError.message || 'تعذر حفظ بيانات الفني.') }
-}
-
 export async function getMyNotifications() {
   if (!supabase) return { data: null, error: new Error('الخدمة غير متاحة الآن.') }
   return supabase.from('notifications').select('id,title,body,notification_type,target_path,is_read,created_at').order('created_at', { ascending: false }).limit(10)
@@ -219,24 +204,55 @@ export async function getProviderLedger() {
 
 export async function getAdminProviderApplications() {
   if (!supabase) return { data: [], error: null }
-  return supabase.from('provider_profiles').select('user_id,approval_status,years_experience,service_description,onboarding_completed,default_commission_rate,created_at,profiles(full_name,phone),provider_documents(id,document_type,status,storage_path,created_at,is_current),provider_services(service_id,is_active,services(name_ar))').order('created_at', { ascending: false }).limit(100)
+  return supabase.from('provider_profiles').select('user_id,approval_status,years_experience,service_description,professional_bio,onboarding_completed,default_commission_rate,created_at,profiles(full_name,phone,city),provider_documents(id,document_type,status,storage_path,created_at,is_current),provider_services(service_id,is_active,services(name_ar))').order('created_at', { ascending: false }).limit(100)
 }
 
-export async function submitProviderOnboarding(input: { yearsExperience: number; serviceDescription: string; phone: string; city: string; serviceIds: string[]; identityFront: File; identityBack: File; cv?: File | null }) {
+const providerDocumentMimeByExtension: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+  pdf: 'application/pdf', doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+}
+const providerDocumentExtensionByMime: Record<string, string> = {
+  'image/jpeg': 'jpg', 'image/png': 'png', 'application/pdf': 'pdf',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+}
+
+function providerDocumentMime(file: File) {
+  const extension = file.name.split('.').pop()?.toLowerCase() ?? ''
+  const inferred = providerDocumentMimeByExtension[extension]
+  if (inferred) {
+    if (!file.type || file.type === 'application/octet-stream' || file.type === 'binary/octet-stream') return inferred
+    return file.type === inferred ? inferred : ''
+  }
+  return file.type
+}
+
+function providerDocumentExtension(file: File) {
+  const extension = file.name.split('.').pop()?.toLowerCase() ?? ''
+  if (providerDocumentMimeByExtension[extension]) return extension
+  return providerDocumentExtensionByMime[providerDocumentMime(file)] ?? ''
+}
+
+export async function submitProviderOnboarding(input: { yearsExperience: number; serviceDescription: string; phone: string; city: string; serviceIds: string[]; identityFront: File; identityBack: File; cv: File }) {
   if (!supabase) throw new Error('تعذر إرسال الملف الآن.')
   const userId = (await supabase.auth.getUser()).data.user?.id
   if (!userId) throw new Error('سجّل الدخول لإكمال ملفك المهني.')
   if (!input.serviceIds.length) throw new Error('اختر خدمة واحدة على الأقل.')
   for (const [label, file] of [['وجه الهوية', input.identityFront], ['ظهر الهوية', input.identityBack]] as const) {
     if (file.size > 5 * 1024 * 1024) throw new Error(`حجم ${label} يجب ألا يتجاوز 5 ميجابايت.`)
-    if (!['image/jpeg', 'image/png'].includes(file.type)) throw new Error(`ارفع ${label} بصيغة JPG أو PNG.`)
+    if (!['image/jpeg', 'image/png'].includes(providerDocumentMime(file))) throw new Error(`ارفع ${label} بصيغة JPG أو PNG؛ النوع المستلم: ${file.type || 'غير محدد'}.`)
   }
   const cvTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-  if (input.cv && (input.cv.size > 10 * 1024 * 1024 || !cvTypes.includes(input.cv.type))) throw new Error('السيرة الذاتية: PDF أو DOC أو DOCX وبحجم لا يتجاوز 10 ميجابايت.')
+  if (!input.cv) throw new Error('أرفق السيرة الذاتية لإكمال ملف الاعتماد.')
+  if (input.cv.size === 0 || input.cv.size > 10 * 1024 * 1024 || !cvTypes.includes(providerDocumentMime(input.cv))) throw new Error('السيرة الذاتية: PDF أو DOC أو DOCX وبحجم من 1 بايت إلى 10 ميجابايت.')
   const upload = async (bucket: string, file: File, prefix: string) => {
-    const path = `${userId}/${prefix}-${crypto.randomUUID()}`
-    const { error } = await supabase!.storage.from(bucket).upload(path, file, { contentType: file.type, upsert: false })
-    if (error) throw new Error('تعذر رفع المستند. تحقق من نوع الملف وحجمه ثم حاول مرة أخرى.')
+    const extension = providerDocumentExtension(file)
+    if (!extension) throw new Error('تعذر قراءة امتداد الملف. أعد حفظه بصيغة JPG أو PNG أو PDF أو DOC أو DOCX ثم اختره مجددًا.')
+    const mimeType = providerDocumentMime(file)
+    const path = `${userId}/${prefix}-${crypto.randomUUID()}.${extension}`
+    const { error } = await supabase!.storage.from(bucket).upload(path, file, { contentType: mimeType, upsert: false })
+    if (error) throw new Error(`تعذر رفع المستند إلى مساحة ${bucket}: ${error.message}. تحقق من اتصالك وصلاحية الحساب ونوع الملف ثم أعد المحاولة.`)
     return path
   }
   const uploaded: { bucket: string; path: string }[] = []
@@ -245,8 +261,8 @@ export async function submitProviderOnboarding(input: { yearsExperience: number;
     uploaded.push({ bucket: 'identity-documents', path: front })
     const back = await upload('identity-documents', input.identityBack, 'identity-back')
     uploaded.push({ bucket: 'identity-documents', path: back })
-    const cv = input.cv ? await upload('provider-cvs', input.cv, 'cv') : null
-    if (cv) uploaded.push({ bucket: 'provider-cvs', path: cv })
+    const cv = await upload('provider-cvs', input.cv, 'cv')
+    uploaded.push({ bucket: 'provider-cvs', path: cv })
     const { error } = await supabase.rpc('provider_submit_onboarding', {
       p_years: input.yearsExperience, p_description: input.serviceDescription.trim(), p_phone: input.phone.trim(), p_city: input.city.trim(),
       p_identity_front_path: front, p_identity_back_path: back, p_cv_path: cv, p_service_ids: input.serviceIds,
@@ -254,6 +270,8 @@ export async function submitProviderOnboarding(input: { yearsExperience: number;
     if (error) {
       const code = error.message.toLowerCase()
       if (code.includes('provider_onboarding_already_submitted')) throw new Error('تم إرسال ملفك بالفعل وهو قيد المراجعة أو معتمد؛ لا حاجة لإعادة الإرسال.')
+      if (code.includes('identity_front_document_missing') || code.includes('identity_back_document_missing') || code.includes('cv_document_missing')) throw new Error('لم يصل أحد الملفات كاملًا. اختر ملفات الهوية والسيرة مجددًا ثم أعد الإرسال.')
+      if (code.includes('invalid_cv_path')) throw new Error('تعذر التحقق من ملف السيرة؛ أعد اختياره بصيغة PDF أو DOC أو DOCX.')
       if (code.includes('at_least_one_service_required')) throw new Error('اختر خدمة واحدة على الأقل.')
       if (code.includes('service_unavailable')) throw new Error('تغيّرت قائمة الخدمات. حدّث الصفحة واختر الخدمات المتاحة.')
       if (code.includes('invalid_experience_years')) throw new Error('أدخل سنوات خبرة صحيحة بين 0 و70.')
@@ -294,6 +312,28 @@ export async function updateAdminAccount(input: { userId: string; fullName: stri
   }
 }
 
+export async function setAdminAccountActive(userId: string, active: boolean) {
+  if (!supabase) throw new Error('تعذر تغيير حالة الحساب الآن.')
+  const { error } = await supabase.rpc('admin_set_account_active', { p_user_id: userId, p_is_active: active })
+  if (!error) return
+  const message = error.message.toLowerCase()
+  if (message.includes('admin_required')) throw new Error('يلزم حساب إداري لتغيير حالة الحساب.')
+  if (message.includes('account_not_found')) throw new Error('الحساب غير موجود أو لا يمكن إيقافه من هذه الشاشة.')
+  throw new Error(`تعذر تغيير حالة الحساب: ${error.message}`)
+}
+
+export async function deleteAdminAccount(userId: string) {
+  if (!supabase) throw new Error('تعذر حذف الحساب الآن.')
+  const { error } = await supabase.rpc('admin_delete_account', { p_user_id: userId })
+  if (!error) return
+  const message = error.message.toLowerCase()
+  if (message.includes('admin_required')) throw new Error('يلزم حساب إداري لحذف الحسابات.')
+  if (message.includes('account_has_history')) throw new Error('لا يمكن حذف حساب مرتبط بطلبات أو سجلات مالية؛ أوقف الحساب بدلًا من حذف تاريخه.')
+  if (message.includes('account_has_company')) throw new Error('لا يمكن حذف حساب مالك لشركة؛ انقل الملكية أو أوقف الحساب أولًا.')
+  if (message.includes('account_not_found')) throw new Error('الحساب غير موجود أو ليس حساب عميل/فني.')
+  throw new Error(`تعذر حذف الحساب: ${error.message}`)
+}
+
 export async function updateAdminProviderSpecialties(providerId: string, serviceIds: string[]) {
   if (!supabase) throw new Error('تعذر تحديث خدمات الفني الآن.')
   const { error } = await supabase.rpc('admin_set_provider_specialties', { p_provider_id: providerId, p_service_ids: serviceIds })
@@ -318,10 +358,13 @@ export async function getAdminAccountRecords(userId: string) {
   return { profile: profile.data, role: role.data?.role ?? null, bookings: bookings.data ?? [], provider: provider.data, ledger: ledger.data ?? [] }
 }
 
-export async function getAdminDocumentUrl(documentType: string, path: string) {
+export async function getAdminDocumentUrl(documentType: string, path: string, download = false) {
   if (!supabase) throw new Error('تعذر فتح المستند الآن.')
   const bucket = documentType === 'cv' ? 'provider-cvs' : 'identity-documents'
-  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 300, { download: true })
+  const extension = path.split('.').pop()?.toLowerCase()
+  const typeLabel = documentType === 'cv' ? 'السيرة-الذاتية' : documentType === 'identity_front' ? 'الهوية-الوجه-الأمامي' : 'الهوية-الوجه-الخلفي'
+  const filename = `${typeLabel}${extension && extension !== path ? `.${extension}` : ''}`
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 300, download ? { download: filename } : {})
   if (error) throw new Error('المستند غير متاح أو لا تملك صلاحية عرضه.')
   return data.signedUrl
 }

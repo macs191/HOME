@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, FileText, Search, ShieldCheck, UserRound, UsersRound, X } from 'lucide-react'
-import { getAdminAccounts, getAdminAccountRecords, getAdminDocumentUrl, getProviderSpecialtyOptions, updateAdminAccount, updateAdminProviderSpecialties } from '../lib/supabase'
+import { Download, FileText, Power, Search, ShieldCheck, Trash2, UserRound, UsersRound, X } from 'lucide-react'
+import { deleteAdminAccount, getAdminAccounts, getAdminAccountRecords, getAdminDocumentUrl, getProviderSpecialtyOptions, setAdminAccountActive, updateAdminAccount, updateAdminProviderSpecialties } from '../lib/supabase'
 
 type Account = Awaited<ReturnType<typeof getAdminAccounts>>[number]
 type Records = Awaited<ReturnType<typeof getAdminAccountRecords>>
@@ -31,6 +31,7 @@ export function AdminAccountsPanel() {
   const [detailsLoading, setDetailsLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [specialtySaving, setSpecialtySaving] = useState(false)
+  const [accountActionBusy, setAccountActionBusy] = useState(false)
   const [serviceOptions, setServiceOptions] = useState<any[]>([])
   const [providerServiceIds, setProviderServiceIds] = useState<string[]>([])
   const [message, setMessage] = useState('')
@@ -86,6 +87,34 @@ export function AdminAccountsPanel() {
     finally { setSpecialtySaving(false) }
   }
 
+  const toggleAccountActive = async () => {
+    if (!selected) return
+    const active = !selected.is_active
+    setAccountActionBusy(true); setError(''); setMessage('')
+    try {
+      await setAdminAccountActive(selected.user_id, active)
+      const updated = { ...selected, is_active: active }
+      setSelected(updated); setAccounts((current) => current.map((item) => item.user_id === updated.user_id ? updated : item))
+      setMessage(active ? 'تم تفعيل الحساب.' : 'تم إيقاف الحساب وإبطال جلساته الحالية.')
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'تعذر تغيير حالة الحساب.') }
+    finally { setAccountActionBusy(false) }
+  }
+
+  const removeAccount = async () => {
+    if (!selected) return
+    if (!window.confirm(`سيُحذف حساب ${selected.full_name || selected.email} نهائيًا من بيانات الدخول. لن يُسمح بحذف حساب له طلبات أو سجلات مالية. متابعة؟`)) return
+    const typed = window.prompt(`للتأكيد، اكتب البريد الإلكتروني للحساب: ${selected.email}`)
+    if (typed !== selected.email) { if (typed !== null) setError('لم يتطابق البريد؛ لم يُحذف أي شيء.'); return }
+    setAccountActionBusy(true); setError(''); setMessage('')
+    try {
+      await deleteAdminAccount(selected.user_id)
+      setAccounts((current) => current.filter((item) => item.user_id !== selected.user_id))
+      setSelected(null); setRecords(null); setDocUrls({}); setMessage('تم حذف الحساب الفارغ وتوثيق الإجراء. احتُفظ بالحسابات ذات سجل تشغيلي عبر الإيقاف بدل الحذف.')
+      void loadAccounts()
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'تعذر حذف الحساب.') }
+    finally { setAccountActionBusy(false) }
+  }
+
   const exportAccounts = () => downloadCsv('حسابات-المنصة.csv', accounts.map((item) => ({ الاسم: item.full_name, البريد: item.email, الجوال: item.phone, المدينة: item.city, النوع: item.role === 'provider' ? 'فني' : 'عميل', الخبرة: item.years_experience, حالة_الاعتماد: item.approval_status, تاريخ_التسجيل: item.created_at })))
   const exportHistory = () => {
     if (!selected || !records) return
@@ -104,11 +133,11 @@ export function AdminAccountsPanel() {
       <section className="panel accounts-list-panel">
         <div className="accounts-filters"><label className="accounts-search"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ابحث بالاسم أو البريد أو الجوال" /></label><select aria-label="تصفية نوع الحساب" value={role} onChange={(event) => setRole(event.target.value as typeof role)}><option value="all">الكل</option><option value="customer">العملاء</option><option value="provider">الفنيون</option></select></div>
         {error && !selected && <div className="inline-error" role="alert"><X size={16} />{error}<button type="button" onClick={() => void loadAccounts()}>إعادة المحاولة</button></div>}
-        {loading ? <div className="loading-state">جارٍ تحميل الحسابات…</div> : accounts.length ? <div className="account-list">{accounts.map((item) => <button type="button" key={item.user_id} className={`account-list-row ${selected?.user_id === item.user_id ? 'selected' : ''}`} onClick={() => void selectAccount(item)}><span className="account-avatar">{item.role === 'provider' ? <ShieldCheck size={18} /> : <UserRound size={18} />}</span><span className="account-list-copy"><strong>{item.full_name || 'بدون اسم'}</strong><small>{item.email}</small><small>{item.phone || 'لا يوجد رقم جوال'} · {item.role === 'provider' ? 'فني' : 'عميل'}</small></span><span className="account-state">{item.role === 'provider' ? statusLabels[item.approval_status ?? 'pending'] ?? item.approval_status : 'عميل'}</span></button>)}</div> : <div className="empty-inline">لا توجد حسابات مطابقة.</div>}
+        {loading ? <div className="loading-state">جارٍ تحميل الحسابات…</div> : accounts.length ? <div className="account-list">{accounts.map((item) => <button type="button" key={item.user_id} className={`account-list-row ${selected?.user_id === item.user_id ? 'selected' : ''}`} onClick={() => void selectAccount(item)}><span className="account-avatar">{item.role === 'provider' ? <ShieldCheck size={18} /> : <UserRound size={18} />}</span><span className="account-list-copy"><strong>{item.full_name || 'بدون اسم'}</strong><small>{item.email}</small><small>{item.phone || 'لا يوجد رقم جوال'} · {item.role === 'provider' ? 'فني' : 'عميل'} · {item.is_active ? 'نشط' : 'موقوف'}</small></span><span className="account-state">{item.role === 'provider' ? statusLabels[item.approval_status ?? 'pending'] ?? item.approval_status : 'عميل'}</span></button>)}</div> : <div className="empty-inline">لا توجد حسابات مطابقة.</div>}
       </section>
       <section className="panel account-detail-panel">
         {!selected ? <div className="account-detail-empty"><UsersRound size={30} /><h3>اختر حسابًا لعرض تفاصيله</h3><p>ستظهر هنا بيانات الحساب وسجلاته ومرفقاته المصرح بها.</p></div> : <>
-          <div className="account-detail-heading"><div><span className="eyebrow">{selected.role === 'provider' ? 'ملف فني' : 'ملف عميل'}</span><h2>{selected.full_name || selected.email}</h2><p className="muted">{selected.email} · {selected.phone || 'لا يوجد رقم جوال'}</p></div><div className="account-detail-actions"><button type="button" className="button button-secondary button-small" onClick={exportAccountRecord} disabled={!records}><Download size={14} />تنزيل الملف</button><button type="button" className="icon-button" onClick={() => { setSelected(null); setRecords(null); setError('') }} aria-label="إغلاق تفاصيل الحساب"><X size={18} /></button></div></div>
+          <div className="account-detail-heading"><div><span className="eyebrow">{selected.role === 'provider' ? 'ملف فني' : 'ملف عميل'} · {selected.is_active ? 'نشط' : 'موقوف'}</span><h2>{selected.full_name || selected.email}</h2><p className="muted">{selected.email} · {selected.phone || 'لا يوجد رقم جوال'}</p></div><div className="account-detail-actions"><button type="button" className="button button-secondary button-small" onClick={() => void toggleAccountActive()} disabled={accountActionBusy}><Power size={14} />{selected.is_active ? 'إيقاف' : 'تفعيل'}</button><button type="button" className="button button-secondary button-small" onClick={() => void removeAccount()} disabled={accountActionBusy}><Trash2 size={14} />حذف</button><button type="button" className="button button-secondary button-small" onClick={exportAccountRecord} disabled={!records}><Download size={14} />تنزيل الملف</button><button type="button" className="icon-button" onClick={() => { setSelected(null); setRecords(null); setError('') }} aria-label="إغلاق تفاصيل الحساب"><X size={18} /></button></div></div>
           {error && <div className="inline-error" role="alert"><X size={16} />{error}</div>}{message && <div className="success-note">{message}</div>}
           {detailsLoading ? <div className="loading-state">جارٍ تحميل سجل الحساب…</div> : records && <>
             <form className="account-edit-form" onSubmit={save}><h3>بيانات الحساب</h3><div className="field-grid"><label className="field-label">الاسم الكامل<input required minLength={2} maxLength={160} value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} /></label><label className="field-label">رقم الجوال<input type="tel" maxLength={32} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label><label className="field-label">المدينة<input maxLength={120} value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} /></label>{selected.role === 'provider' && <label className="field-label">سنوات الخبرة<input type="number" min="0" max="70" value={form.years} onChange={(event) => setForm({ ...form, years: event.target.value })} /></label>}</div>{selected.role === 'provider' && <label className="field-label">نبذة ومجالات العمل<textarea rows={3} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>}<div className="account-edit-actions"><button className="button button-primary" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ التعديلات'}</button><span className="muted">لا يمكن تغيير بيانات الدخول من هنا.</span></div></form>
