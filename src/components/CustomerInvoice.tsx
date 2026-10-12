@@ -16,7 +16,7 @@ export function CustomerInvoice({ booking }: { booking: Booking }) {
   const run = async (action: () => Promise<any>, success: string) => {
     setBusy(true); setMessage('')
     try { const result = await action(); if (result) setInvoice((current) => ({ ...current, ...result })); setMessage(success) }
-    catch (error) { setMessage(error instanceof Error ? error.message : 'تعذر تحديث الفاتورة.') }
+    catch { setMessage('تعذر تحديث الفاتورة. حاول مرة أخرى.') }
     finally { setBusy(false) }
   }
   return <div className="customer-invoice">

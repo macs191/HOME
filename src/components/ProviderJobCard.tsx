@@ -17,7 +17,7 @@ export function ProviderJobCard({ item, onUpdate, onMessage }: Props) {
   const execute = async (action: () => Promise<unknown>, success: string) => {
     setBusy(true); onMessage('')
     try { await action(); await onUpdate(); onMessage(success) }
-    catch (error) { onMessage(`تعذر تنفيذ الإجراء: ${error instanceof Error ? error.message : 'خطأ غير معروف'}`) }
+    catch { onMessage('تعذر تنفيذ الإجراء. تحقق من الاتصال وحاول مرة أخرى.') }
     finally { setBusy(false) }
   }
   const mapUrl = item.latitude != null && item.longitude != null ? `https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([item.address_text, item.district, item.city].filter(Boolean).join(' '))}`

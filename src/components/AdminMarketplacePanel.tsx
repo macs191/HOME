@@ -80,13 +80,13 @@ export function AdminMarketplacePanel({ section, onChanged }: { section: Section
 
   const saveCategory = (event: React.FormEvent) => {
     event.preventDefault()
-    void perform(() => saveAdminCategory({ ...categoryForm, ...(categoryId ? { id: categoryId } : {}) }), 'تم حفظ القسم في قاعدة البيانات وتحديث القائمة.')
+    void perform(() => saveAdminCategory({ ...categoryForm, ...(categoryId ? { id: categoryId } : {}) }), 'تم حفظ القسم وتحديث القائمة.')
   }
   const saveService = (event: React.FormEvent) => {
     event.preventDefault()
     const category_id = serviceForm.category_id || catalog.categories.find((item) => item.is_active)?.id || ''
     if (!category_id) { setMessage('أضف قسمًا فعّالًا أولًا حتى تتمكن من إنشاء خدمة.'); return }
-    void perform(() => saveAdminService({ ...serviceForm, ...(serviceId ? { id: serviceId } : {}), category_id, base_price: serviceForm.pricing_type === 'fixed' ? Number(serviceForm.base_price) : null }), 'تم حفظ الخدمة في قاعدة البيانات وتحديث القائمة.')
+    void perform(() => saveAdminService({ ...serviceForm, ...(serviceId ? { id: serviceId } : {}), category_id, base_price: serviceForm.pricing_type === 'fixed' ? Number(serviceForm.base_price) : null }), 'تم حفظ الخدمة وتحديث القائمة.')
   }
   const editCategory = (row: any) => { setCategoryId(row.id); setCategoryForm({ slug: row.slug, name_ar: row.name_ar, description: row.description ?? '', icon: row.icon ?? 'wrench', color: row.color ?? '#20d4c5', is_active: row.is_active, is_featured: row.is_featured }) }
   const editService = (row: any) => { setServiceId(row.id); setServiceForm({ category_id: row.category_id, slug: row.slug, name_ar: row.name_ar, description: row.description ?? '', pricing_type: row.pricing_type === 'fixed' ? 'fixed' : 'provider_quote', base_price: row.base_price == null ? '' : String(row.base_price), is_active: row.is_active, is_featured: row.is_featured }) }

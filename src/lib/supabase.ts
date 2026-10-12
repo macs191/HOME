@@ -12,7 +12,6 @@ export const supabase = isSupabaseConfigured
     })
   : null
 
-export const dataModeLabel = isSupabaseConfigured ? 'Supabase فعّال — تحقق من الصلاحيات' : 'وضع المعاينة — اربط Supabase'
 
 export async function getLiveCatalog(): Promise<{ categories: ServiceCategory[]; services: Service[] }> {
   if (!supabase) throw new Error('الكتالوج المباشر غير متاح في وضع المعاينة.')
@@ -60,12 +59,12 @@ export type AuthState = { session: Session | null; user: User | null }
 function authMessage(error: { message?: string }) {
   const message = error.message?.toLowerCase() ?? ''
   if (message.includes('invalid login credentials')) return 'البريد الإلكتروني أو كلمة المرور غير صحيحة.'
-  if (message.includes('email not confirmed')) return 'ما زال تأكيد البريد مفعّلًا في إعدادات Supabase Auth. عطّل خيار Confirm email ليتمكن العميل من الدخول فورًا.'
-  if (message.includes('provider is not enabled') || message.includes('unsupported provider')) return 'Google غير مفعّل في Supabase Auth. أضف Google Client ID وClient Secret من إعدادات Authentication ثم أضف رابط /auth/callback إلى Redirect URLs.'
+  if (message.includes('email not confirmed')) return 'لم يكتمل تفعيل البريد الإلكتروني. تحقق من بريدك ثم حاول مجددًا.'
+  if (message.includes('provider is not enabled') || message.includes('unsupported provider')) return 'الدخول بحساب Google غير متاح الآن. استخدم البريد الإلكتروني أو حاول لاحقًا.'
   if (message.includes('already registered')) return 'هذا البريد مسجل مسبقًا. جرّب تسجيل الدخول.'
   if (message.includes('password should be')) return 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.'
   if (message.includes('rate limit')) return 'تم تجاوز عدد المحاولات. انتظر قليلًا ثم حاول.'
-  return error.message || 'حدث خطأ في المصادقة، حاول مرة أخرى.'
+  return 'تعذر إتمام تسجيل الدخول. تحقق من بياناتك وحاول مرة أخرى.'
 }
 
 export async function getAuthState(): Promise<AuthState> {
@@ -91,14 +90,14 @@ export function onAuthStateChange(callback: (state: AuthState) => void) {
 }
 
 export async function signInAccount(email: string, password: string) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا لتفعيل تسجيل الدخول.')
+  if (!supabase) throw new Error('تعذر تفعيل تسجيل الدخول.')
   const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
   if (error) throw new Error(authMessage(error))
   return data
 }
 
 export async function signUpAccount(input: { email: string; password: string; fullName: string; phone: string; role: Extract<Role, 'customer' | 'provider'> }) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا لتفعيل إنشاء الحساب.')
+  if (!supabase) throw new Error('تعذر تفعيل إنشاء الحساب.')
   const { data, error } = await supabase.auth.signUp({
     email: input.email.trim(),
     password: input.password,
@@ -109,13 +108,13 @@ export async function signUpAccount(input: { email: string; password: string; fu
 }
 
 export async function finishOAuthSignIn(requestedRole: Extract<Role, 'customer' | 'provider'>): Promise<Role> {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.auth.getSession()
   if (error) throw new Error(authMessage(error))
   if (!data.session?.user) throw new Error('تعذر استعادة جلسة Google. أعد المحاولة من صفحة الدخول.')
   if (requestedRole === 'provider') await ensureProviderProfile('provider')
   const role = await getMyRole()
-  if (!role) throw new Error('تم تسجيل الدخول لكن لم يُنشأ دور للحساب. راجع قواعد تهيئة الحساب في Supabase.')
+  if (!role) throw new Error('تعذر تجهيز صلاحيات الحساب. تواصل مع الإدارة إذا استمرت المشكلة.')
   try { sessionStorage.removeItem('homefix-google-role') } catch { /* تجاهل تعذر التخزين */ }
   return role
 }
@@ -125,7 +124,7 @@ export async function signOutAccount() {
 }
 
 export async function createBookingFromDraft(draft: BookingDraft, serviceSlug: string) {
-  if (!supabase) throw new Error('لم يُحفظ الطلب: اربط Supabase أولًا لتفعيل الحجز الحقيقي.')
+  if (!supabase) throw new Error('تعذر إنشاء الطلب الآن. حاول مرة أخرى لاحقًا.')
   const { data: service, error: serviceError } = await supabase.from('services').select('id').eq('slug', serviceSlug).eq('is_active', true).maybeSingle()
   if (serviceError) throw serviceError
   if (!service) throw new Error('الخدمة غير متاحة حاليًا')
@@ -154,7 +153,7 @@ export async function getMyBookings() {
 
 
 export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provider'> = 'customer', nextPath?: string) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا لتفعيل الدخول بحساب Google.')
+  if (!supabase) throw new Error('تعذر تفعيل الدخول بحساب Google.')
   try { sessionStorage.setItem('homefix-google-role', role) } catch { /* لا نوقف OAuth إذا منع المتصفح التخزين */ }
   const callback = new URL('/auth/callback', window.location.origin)
   callback.searchParams.set('role', role)
@@ -164,7 +163,7 @@ export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provide
 }
 
 export async function submitProviderVerification(input: { yearsExperience: number; serviceDescription: string; nationalIdLast4: string; identityFile: File }) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا لتفعيل رفع مستند الهوية.')
+  if (!supabase) throw new Error('تعذر تفعيل رفع مستند الهوية.')
   const { data: sessionData } = await supabase.auth.getSession()
   const userId = sessionData.session?.user.id
   if (!userId) throw new Error('سجّل الدخول قبل إرسال ملف الفني.')
@@ -179,21 +178,21 @@ export async function submitProviderVerification(input: { yearsExperience: numbe
 }
 
 export async function getMyNotifications() {
-  if (!supabase) return { data: null, error: new Error('Supabase غير مهيأ.') }
+  if (!supabase) return { data: null, error: new Error('الخدمة غير متاحة الآن.') }
   return supabase.from('notifications').select('id,title,body,notification_type,target_path,is_read,created_at').order('created_at', { ascending: false }).limit(10)
 }
 
 export async function markNotificationRead(notificationId: string) {
-  if (!supabase) throw new Error('Supabase غير مهيأ.')
+  if (!supabase) throw new Error('الخدمة غير متاحة الآن.')
   const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId)
   if (error) throw new Error(error.message || 'تعذر تعليم الإشعار كمقروء.')
 }
 
 export async function getMyProviderProfile() {
-  if (!supabase) return { data: null, error: new Error('Supabase غير مهيأ.') }
+  if (!supabase) return { data: null, error: new Error('الخدمة غير متاحة الآن.') }
   const userId = (await supabase.auth.getUser()).data.user?.id
   if (!userId) return { data: null, error: new Error('تسجيل الدخول مطلوب.') }
-  return supabase.from('provider_profiles').select('approval_status,years_experience,service_description,onboarding_completed,default_commission_rate').eq('user_id', userId).maybeSingle()
+  return supabase.from('provider_profiles').select('approval_status,years_experience,service_description,onboarding_completed,default_commission_rate,profiles(full_name,phone,city)').eq('user_id', userId).maybeSingle()
 }
 
 export async function getProviderWorkQueue() {
@@ -209,7 +208,101 @@ export async function getProviderLedger() {
 
 export async function getAdminProviderApplications() {
   if (!supabase) return { data: [], error: null }
-  return supabase.from('provider_profiles').select('user_id,approval_status,years_experience,service_description,onboarding_completed,default_commission_rate,created_at,profiles(full_name,phone),provider_documents(id,status,storage_path,created_at),provider_services(service_id,is_active,services(name_ar))').order('created_at', { ascending: false }).limit(100)
+  return supabase.from('provider_profiles').select('user_id,approval_status,years_experience,service_description,onboarding_completed,default_commission_rate,created_at,profiles(full_name,phone),provider_documents(id,document_type,status,storage_path,created_at,is_current),provider_services(service_id,is_active,services(name_ar))').order('created_at', { ascending: false }).limit(100)
+}
+
+export async function submitProviderOnboarding(input: { yearsExperience: number; serviceDescription: string; phone: string; city: string; serviceIds: string[]; identityFront: File; identityBack: File; cv?: File | null }) {
+  if (!supabase) throw new Error('تعذر إرسال الملف الآن.')
+  const userId = (await supabase.auth.getUser()).data.user?.id
+  if (!userId) throw new Error('سجّل الدخول لإكمال ملفك المهني.')
+  if (!input.serviceIds.length) throw new Error('اختر خدمة واحدة على الأقل.')
+  for (const [label, file] of [['وجه الهوية', input.identityFront], ['ظهر الهوية', input.identityBack]] as const) {
+    if (file.size > 5 * 1024 * 1024) throw new Error(`حجم ${label} يجب ألا يتجاوز 5 ميجابايت.`)
+    if (!['image/jpeg', 'image/png'].includes(file.type)) throw new Error(`ارفع ${label} بصيغة JPG أو PNG.`)
+  }
+  const cvTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+  if (input.cv && (input.cv.size > 10 * 1024 * 1024 || !cvTypes.includes(input.cv.type))) throw new Error('السيرة الذاتية: PDF أو DOC أو DOCX وبحجم لا يتجاوز 10 ميجابايت.')
+  const upload = async (bucket: string, file: File, prefix: string) => {
+    const path = `${userId}/${prefix}-${crypto.randomUUID()}`
+    const { error } = await supabase!.storage.from(bucket).upload(path, file, { contentType: file.type, upsert: false })
+    if (error) throw new Error('تعذر رفع المستند. تحقق من نوع الملف وحجمه ثم حاول مرة أخرى.')
+    return path
+  }
+  const uploaded: { bucket: string; path: string }[] = []
+  try {
+    const front = await upload('identity-documents', input.identityFront, 'identity-front')
+    uploaded.push({ bucket: 'identity-documents', path: front })
+    const back = await upload('identity-documents', input.identityBack, 'identity-back')
+    uploaded.push({ bucket: 'identity-documents', path: back })
+    const cv = input.cv ? await upload('provider-cvs', input.cv, 'cv') : null
+    if (cv) uploaded.push({ bucket: 'provider-cvs', path: cv })
+    const { error } = await supabase.rpc('provider_submit_onboarding', {
+      p_years: input.yearsExperience, p_description: input.serviceDescription.trim(), p_phone: input.phone.trim(), p_city: input.city.trim(),
+      p_identity_front_path: front, p_identity_back_path: back, p_cv_path: cv, p_service_ids: input.serviceIds,
+    })
+    if (error) {
+      const code = error.message.toLowerCase()
+      if (code.includes('at_least_one_service_required')) throw new Error('اختر خدمة واحدة على الأقل.')
+      if (code.includes('service_unavailable')) throw new Error('تغيّرت قائمة الخدمات. حدّث الصفحة واختر الخدمات المتاحة.')
+      if (code.includes('invalid_experience_years')) throw new Error('أدخل سنوات خبرة صحيحة بين 0 و70.')
+      if (code.includes('invalid_service_description')) throw new Error('أضف نبذة مهنية لا تقل عن 10 أحرف.')
+      if (code.includes('invalid_phone')) throw new Error('أدخل رقم جوال صحيحًا.')
+      if (code.includes('invalid_city')) throw new Error('أدخل مدينة تقديم الخدمة.')
+      throw new Error('تعذر حفظ الملف. راجع البيانات وحاول مرة أخرى.')
+    }
+  } catch (error) {
+    await Promise.all(uploaded.map(({ bucket, path }) => supabase!.storage.from(bucket).remove([path])))
+    throw error
+  }
+}
+
+export async function getAdminAccounts(search = '', role: 'all' | 'customer' | 'provider' = 'all') {
+  if (!supabase) throw new Error('تعذر تحميل الحسابات الآن.')
+  const { data, error } = await supabase.rpc('admin_list_accounts', { p_search: search.trim() || null, p_role: role })
+  if (error) throw new Error(error.message.includes('admin_required') ? 'يلزم حساب إداري لعرض الحسابات.' : 'تعذر تحميل الحسابات. حاول مرة أخرى.')
+  return (data ?? []) as Array<{ user_id: string; email: string; role: 'customer' | 'provider'; full_name: string; phone: string | null; city: string | null; is_active: boolean; created_at: string; years_experience: number | null; approval_status: string | null; service_description: string | null }>
+}
+
+export async function updateAdminAccount(input: { userId: string; fullName: string; phone: string; city: string; yearsExperience?: number | null; serviceDescription?: string }) {
+  if (!supabase) throw new Error('تعذر حفظ بيانات الحساب الآن.')
+  const { error } = await supabase.rpc('admin_update_account', {
+    p_user_id: input.userId, p_full_name: input.fullName, p_phone: input.phone || null,
+    p_city: input.city || null, p_years_experience: input.yearsExperience ?? null,
+    p_service_description: input.serviceDescription ?? null,
+  })
+  if (error) throw new Error(error.message.includes('admin_required') ? 'يلزم حساب إداري لتعديل الحسابات.' : 'تعذر حفظ التغييرات. تحقق من البيانات وحاول مرة أخرى.')
+}
+
+export async function updateAdminProviderSpecialties(providerId: string, serviceIds: string[]) {
+  if (!supabase) throw new Error('تعذر تحديث خدمات الفني الآن.')
+  const { error } = await supabase.rpc('admin_set_provider_specialties', { p_provider_id: providerId, p_service_ids: serviceIds })
+  if (!error) return
+  const message = error.message.toLowerCase()
+  if (message.includes('admin_required')) throw new Error('يلزم حساب إداري لتعديل خدمات الفني.')
+  if (message.includes('at_least_one_service_required')) throw new Error('اختر خدمة واحدة على الأقل.')
+  if (message.includes('service_unavailable')) throw new Error('تغيّرت قائمة الخدمات. حدّث الصفحة ثم حاول مجددًا.')
+  throw new Error('تعذر تحديث خدمات الفني. حاول مرة أخرى.')
+}
+
+export async function getAdminAccountRecords(userId: string) {
+  if (!supabase) throw new Error('تعذر تحميل سجل الحساب الآن.')
+  const [profile, role, bookings, provider, ledger] = await Promise.all([
+    supabase.from('profiles').select('id,full_name,phone,city,is_active,created_at').eq('id', userId).maybeSingle(),
+    supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle(),
+    supabase.from('bookings').select('id,booking_number,status,payment_status,city,district,address_text,issue_description,scheduled_date,created_at,price_snapshot,services(name_ar),payments(invoice_number,amount,status,payment_method)').or(`customer_id.eq.${userId},provider_id.eq.${userId}`).order('created_at', { ascending: false }).limit(100),
+    supabase.from('provider_profiles').select('years_experience,service_description,professional_bio,approval_status,onboarding_completed,provider_documents(id,document_type,storage_path,status,created_at,is_current),provider_services(service_id,is_active,services(name_ar,service_categories(name_ar)))').eq('user_id', userId).maybeSingle(),
+    supabase.from('provider_ledger_entries').select('id,entry_type,amount,note,booking_id,created_at').eq('provider_id', userId).order('created_at', { ascending: false }).limit(100),
+  ])
+  for (const result of [profile, role, bookings, provider, ledger]) if (result.error) throw new Error('تعذر تحميل سجل الحساب. حاول مرة أخرى.')
+  return { profile: profile.data, role: role.data?.role ?? null, bookings: bookings.data ?? [], provider: provider.data, ledger: ledger.data ?? [] }
+}
+
+export async function getAdminDocumentUrl(documentType: string, path: string) {
+  if (!supabase) throw new Error('تعذر فتح المستند الآن.')
+  const bucket = documentType === 'cv' ? 'provider-cvs' : 'identity-documents'
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 300, { download: true })
+  if (error) throw new Error('المستند غير متاح أو لا تملك صلاحية عرضه.')
+  return data.signedUrl
 }
 
 export async function getAdminOperations() {
@@ -239,21 +332,21 @@ export async function getAdminOverview() {
 }
 
 export async function reviewProviderVerification(providerId: string, status: 'approved' | 'rejected') {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('review_provider_verification', { p_provider_id: providerId, p_status: status, p_note: status === 'approved' ? 'تم اعتماد ملف الفني من الإدارة' : 'تم رفض الملف من الإدارة' })
   if (error) throw new Error(error.message || 'تعذر تحديث حالة اعتماد الفني.')
   return data
 }
 
 export async function assignBookingToProvider(bookingId: string, providerId: string) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('assign_booking', { p_booking_id: bookingId, p_provider_id: providerId })
   if (error) throw new Error(error.message || 'تعذر إسناد الطلب.')
   return data
 }
 
 export async function addProviderLedgerEntry(providerId: string, bookingId: string | null, entryType: 'earning' | 'late_penalty' | 'adjustment' | 'payout', amount: number, note: string) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('add_provider_ledger_entry', { p_provider_id: providerId, p_booking_id: bookingId, p_entry_type: entryType, p_amount: amount, p_note: note })
   if (error) throw new Error(error.message || 'تعذر حفظ القيد المالي.')
   return data
@@ -271,21 +364,21 @@ export async function ensureProviderProfile(explicitRole?: 'provider') {
 
 
 export async function advanceProviderBooking(bookingId: string) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('provider_advance_booking', { p_booking_id: bookingId })
   if (error) throw new Error(error.message || 'تعذر تحديث حالة المهمة.')
   return data
 }
 
 export async function submitProviderQuote(bookingId: string, amount: number, note: string) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('provider_submit_quote', { p_booking_id: bookingId, p_amount: amount, p_note: note })
   if (error) throw new Error(error.message || 'تعذر إرسال السعر إلى الإدارة.')
   return data
 }
 
 export async function finishFixedPriceBooking(bookingId: string) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('provider_finish_fixed_booking', { p_booking_id: bookingId })
   if (error) throw new Error(error.message || 'تعذر إنهاء المهمة وإصدار الفاتورة.')
   return data
@@ -297,7 +390,7 @@ export async function getAdminQuotes() {
 }
 
 export async function acceptProviderQuote(quoteId: string) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('admin_accept_booking_quote', { p_quote_id: quoteId })
   if (error) throw new Error(error.message || 'تعذر اعتماد السعر وإصدار الفاتورة.')
   return data
@@ -309,47 +402,47 @@ export async function getAdminPayments() {
 }
 
 export async function reviewInvoicePayment(paymentId: string, paid: boolean, note = '') {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('admin_review_invoice_payment', { p_payment_id: paymentId, p_paid: paid, p_note: note })
   if (error) throw new Error(error.message || 'تعذر تحديث حالة الفاتورة.')
   return data
 }
 
 export async function chooseInvoicePayment(paymentId: string, method: 'cash' | 'bank_transfer') {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('customer_select_invoice_payment', { p_payment_id: paymentId, p_method: method })
   if (error) throw new Error(error.message || 'تعذر حفظ وسيلة الدفع.')
   return data
 }
 
 export async function submitTransferReference(paymentId: string, reference: string) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('customer_submit_transfer_reference', { p_payment_id: paymentId, p_reference: reference })
   if (error) throw new Error(error.message || 'تعذر إرسال مرجع التحويل.')
   return data
 }
 
 export async function setProviderCommission(providerId: string, rate: number) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('admin_set_provider_commission', { p_provider_id: providerId, p_rate: rate })
   if (error) throw new Error(error.message || 'تعذر حفظ نسبة العمولة.')
   return data
 }
 
 export async function getPlatformSettings() {
-  if (!supabase) return { data: null, error: new Error('Supabase غير مهيأ.') }
+  if (!supabase) return { data: null, error: new Error('الخدمة غير متاحة الآن.') }
   return supabase.from('platform_settings').select('id,default_commission_rate,bank_name,bank_account_name,iban').eq('id', 1).maybeSingle()
 }
 
 export async function saveDefaultCommission(rate: number) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('admin_set_default_commission', { p_rate: rate })
   if (error) throw new Error(error.message || 'تعذر حفظ العمولة الافتراضية.')
   return data
 }
 
 export async function savePaymentSettings(bankName: string, accountName: string, iban: string) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('admin_update_payment_settings', { p_bank_name: bankName, p_account_name: accountName, p_iban: iban })
   if (error) throw new Error(error.message || 'تعذر حفظ معلومات التحويل.')
   return data
@@ -367,7 +460,7 @@ export async function getAdminCatalog() {
 }
 
 export async function saveAdminCategory(input: { id?: string; slug: string; name_ar: string; description: string; icon: string; color: string; is_active: boolean; is_featured: boolean }) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { id, ...values } = input
   const result = id ? await supabase.from('service_categories').update(values).eq('id', id).select().single() : await supabase.from('service_categories').insert(values).select().single()
   if (result.error) throw new Error(result.error.message)
@@ -375,7 +468,7 @@ export async function saveAdminCategory(input: { id?: string; slug: string; name
 }
 
 export async function saveAdminService(input: { id?: string; category_id: string; slug: string; name_ar: string; description: string; pricing_type: 'fixed' | 'provider_quote'; base_price: number | null; is_active: boolean; is_featured: boolean }) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   if (input.pricing_type === 'fixed' && (!input.base_price || input.base_price <= 0)) throw new Error('أدخل سعرًا ثابتًا أكبر من صفر.')
   const { id, ...values } = input
   const result = id ? await supabase.from('services').update(values).eq('id', id).select().single() : await supabase.from('services').insert(values).select().single()
@@ -385,17 +478,17 @@ export async function saveAdminService(input: { id?: string; category_id: string
 
 
 export async function getProviderSpecialtyOptions() {
-  if (!supabase) return { data: [], error: new Error('Supabase غير مهيأ.') }
+  if (!supabase) return { data: [], error: new Error('الخدمة غير متاحة الآن.') }
   return supabase.from('services').select('id,name_ar,service_categories(name_ar)').eq('is_active', true).order('name_ar').limit(200)
 }
 
 export async function getProviderSpecialties() {
-  if (!supabase) return { data: [], error: new Error('Supabase غير مهيأ.') }
+  if (!supabase) return { data: [], error: new Error('الخدمة غير متاحة الآن.') }
   return supabase.rpc('provider_get_specialties')
 }
 
 export async function saveProviderSpecialties(serviceIds: string[]) {
-  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('provider_set_specialties', { p_service_ids: serviceIds })
   if (error) throw new Error(error.message || 'تعذر حفظ تخصصات الفني.')
   return data
