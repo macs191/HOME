@@ -1,4 +1,4 @@
-export type Role = 'customer' | 'provider' | 'company' | 'admin'
+export type Role = 'customer' | 'provider' | 'company' | 'admin' | 'sub_admin'
 
 export type ServiceCategory = {
   id: string

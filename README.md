@@ -29,7 +29,7 @@ VITE_SUPABASE_ANON_KEY=YOUR_ANON_KEY
 
 ## إعداد Supabase
 
-1. المشروع المرتبط حاليًا هو `mqerrhdlkahtvrlwwwtq`، وقد تم تصفير `public` وحسابات Auth، ثم إعادة كتالوج HOME SERVICE (12 خدمة و11 قسمًا).
+1. المشروع المرتبط حاليًا هو `ojivulfurjjsskqzghfb`، وقد تم تجهيز `public` وحسابات Auth وكتالوج HOME SERVICE (12 خدمة و11 قسمًا).
 2. طبّق migration المصدر `supabase/migrations/20261010000000_initial_schema.sql` و`supabase/migrations/20261010000001_runtime_bootstrap.sql` على أي مشروع جديد.
 3. فعّل Email Auth أو مزود تسجيل الدخول المطلوب من Authentication.
 4. لا تجعل إنشاء دور `admin` متاحًا من الواجهة. امنح أول مدير عبر SQL آمن بعد تسجيل حسابه ومراجعة معرّف المستخدم:
@@ -76,4 +76,5 @@ where user_id = 'USER_UUID_FROM_AUTH_USERS';
 - زر طلب الخدمة يفتح حوار حساب قبل إدخال العنوان، مع Google OAuth عند تفعيل Google provider في Supabase Auth.
 - صفحة الفني تحتوي على نموذج اعتماد ورفع هوية إلى bucket خاص، ولا تعرض المستندات إلا لصاحبها أو الإدارة عبر RLS.
 - لوحة الإدارة تحتوي على إسناد طلب وقيود أجر/خصم/تسوية عبر RPC. طبّق `supabase/migrations/20261010000002_provider_operations.sql` قبل التشغيل.
-- تم تطبيق migrations على مشروع Supabase الجديد `ojivulfurjjsskqzghfb` وتفعيل جداول الفنيين وRLS وEdge Functions؛ تبقى أسرار Stripe الخاصة ببوابة الدفع مطلوبة داخل إعدادات Edge Functions.
+- تم تطبيق migrations على مشروع Supabase الجديد `ojivulfurjjsskqzghfb` وتفعيل جداول الفنيين وRLS وEdge Functions. أضيفت migration `20261012000003_admin_controls.sql` لتعيين دور الفني عند التسجيل، واعتماد/رفض الملفات، ومنع إسناد الطلب إلى فني غير معتمد. تبقى أسرار Stripe الخاصة ببوابة الدفع مطلوبة داخل إعدادات Edge Functions.
+- حساب المدير التشغيلي `admin171@gmail.com` مؤكد البريد ودوره `admin` في `user_roles`. لا تستخدم كلمة المرور في المستودع أو السجلات.

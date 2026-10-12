@@ -32,6 +32,16 @@ export async function getAuthState(): Promise<AuthState> {
   return { session: data.session, user: data.session?.user ?? null }
 }
 
+export async function getMyRole(): Promise<Role | null> {
+  if (!supabase) return null
+  const { data: sessionData } = await supabase.auth.getSession()
+  const userId = sessionData.session?.user.id
+  if (!userId) return null
+  const { data, error } = await supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle()
+  if (error) throw new Error(error.message || 'تعذر التحقق من صلاحيات الحساب.')
+  return (data?.role as Role | undefined) ?? null
+}
+
 export function onAuthStateChange(callback: (state: AuthState) => void) {
   if (!supabase) return { unsubscribe: () => undefined }
   const { data } = supabase.auth.onAuthStateChange((_event, session) => callback({ session, user: session?.user ?? null }))
@@ -144,6 +154,26 @@ export async function getProviderLedger() {
 export async function getAdminProviderApplications() {
   if (!supabase) return { data: [], error: null }
   return supabase.from('provider_profiles').select('user_id,approval_status,years_experience,service_description,onboarding_completed,created_at,profiles(full_name,phone),provider_documents(id,status,storage_path,created_at)').order('created_at', { ascending: false }).limit(100)
+}
+
+export async function getAdminOverview() {
+  if (!supabase) return { bookings: 0, approvedProviders: 0, paidAmount: 0, openComplaints: 0 }
+  const [bookings, providers, payments] = await Promise.all([
+    supabase.from('bookings').select('id', { count: 'exact', head: true }),
+    supabase.from('provider_profiles').select('user_id', { count: 'exact', head: true }).eq('approval_status', 'approved'),
+    supabase.from('payments').select('amount').eq('status', 'paid').limit(500),
+  ])
+  if (bookings.error) throw bookings.error
+  if (providers.error) throw providers.error
+  if (payments.error) throw payments.error
+  return { bookings: bookings.count ?? 0, approvedProviders: providers.count ?? 0, paidAmount: (payments.data ?? []).reduce((sum, item) => sum + Number(item.amount || 0), 0), openComplaints: 0 }
+}
+
+export async function reviewProviderVerification(providerId: string, status: 'approved' | 'rejected') {
+  if (!supabase) throw new Error('أضف إعدادات Supabase أولًا.')
+  const { data, error } = await supabase.rpc('review_provider_verification', { p_provider_id: providerId, p_status: status, p_note: status === 'approved' ? 'تم اعتماد ملف الفني من الإدارة' : 'تم رفض الملف من الإدارة' })
+  if (error) throw new Error(error.message || 'تعذر تحديث حالة اعتماد الفني.')
+  return data
 }
 
 export async function assignBookingToProvider(bookingId: string, providerId: string) {
