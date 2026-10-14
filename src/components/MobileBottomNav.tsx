@@ -1,10 +1,15 @@
+import { useEffect, useRef } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 export type MobileNavItem = { to: string; label: string; icon: LucideIcon }
 
 export function MobileBottomNav({ items, activePath }: { items: MobileNavItem[]; activePath: string }) {
-  return <nav className="mobile-bottom-nav" aria-label="التنقل الرئيسي للهاتف">
+  const navRef = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    navRef.current?.querySelector<HTMLAnchorElement>('a.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [activePath])
+  return <nav ref={navRef} className="mobile-bottom-nav" aria-label="التنقل الرئيسي للهاتف">
     {items.map(({ to, label, icon: Icon }) => {
       const active = activePath === to || (to !== '/' && activePath.startsWith(`${to}/`))
       return <Link key={to} to={to} className={active ? 'active' : ''} aria-current={active ? 'page' : undefined}>

@@ -1,5 +1,6 @@
 import { createClient, type Session, type User } from '@supabase/supabase-js'
 import type { BookingDraft, Role, Service, ServiceCategory } from '../types'
+import { prepareBookingPhoto, sha256Hex } from './booking-images'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -11,6 +12,38 @@ export const supabase = isSupabaseConfigured
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
     })
   : null
+
+const actionErrors: Array<[string, string]> = [
+  ['booking_not_customer_cancellable', 'لا يمكن إلغاء هذا الطلب تلقائيًا بعد بدء التنفيذ أو وجود فاتورة. تواصل مع الإدارة للمساعدة.'],
+  ['booking_not_admin_cancellable', 'لا يمكن إغلاق الطلب بعد إكماله أو وجود فاتورة؛ يلزم مسار مراجعة مالي.'],
+  ['booking_not_reassignable', 'لا يمكن تغيير الفني بعد بدء التنفيذ أو وجود فاتورة.'],
+  ['booking_not_unassignable', 'لا يمكن فك الإسناد بعد بدء التنفيذ أو وجود فاتورة.'],
+  ['provider_not_approved_or_active', 'اختر فنيًا معتمدًا وحسابه نشط.'],
+  ['provider_not_approved_or_inactive', 'اختر فنيًا معتمدًا وحسابه نشط.'],
+  ['provider_schedule_conflict', 'الفني لديه طلب آخر في اليوم والفترة نفسيهما.'],
+  ['booking_not_assignable', 'هذا الطلب لم يعد متاحًا للإسناد. حدّث القائمة وحاول مجددًا.'],
+  ['quote_already_pending_or_accepted', 'يوجد عرض سعر قيد المراجعة أو معتمد لهذا الطلب بالفعل.'],
+  ['work_or_rejected_quote_required', 'لا يمكن إرسال السعر إلا بعد بدء المهمة أو بعد إعادة عرض مرفوض.'],
+  ['fixed_price_service', 'هذه خدمة بسعر ثابت ولا تحتاج إلى عرض سعر من الفني.'],
+  ['reason_required', 'اكتب سببًا واضحًا لا يقل عن 3 أحرف.'],
+  ['provider_profile_suspended', 'الحساب المهني موقوف؛ تواصل مع الإدارة قبل تعديل التخصصات.'],
+  ['invalid_specialty_count', 'اختر من تخصص واحد إلى 20 تخصصًا.'],
+  ['invoice_not_selectable', 'الفاتورة غير متاحة لاختيار وسيلة الدفع. حدّث الطلبات وحاول مجددًا.'],
+  ['invalid_payment_method', 'وسيلة الدفع المختارة غير متاحة.'],
+  ['transfer_reference_required', 'أدخل مرجع التحويل الصحيح.'],
+  ['payment_provider_or_amount_mismatch', 'بيانات وسيلة الدفع أو مبلغ الفاتورة لا تطابق الطلب. حدّث الفاتورة وتواصل مع الإدارة إذا استمرت المشكلة.'],
+  ['invalid_report_date_range', 'اختر فترة صحيحة لا تتجاوز 366 يومًا.'],
+  ['quote_not_pending', 'تمت مراجعة هذا العرض أو تغيّرت حالته. حدّث قائمة العروض.'],
+  ['payment_rejection_reason_required', 'اكتب سبب رفض التحويل قبل التأكيد.'],
+  ['paid_payment_cannot_be_reversed', 'لا يمكن إلغاء تحصيل مسجل؛ يلزم تسجيل عملية استرداد مستقلة.'],
+  ['attachment_limit_reached', 'وصل الطلب إلى الحد الأقصى البالغ 5 صور.'],
+  ['booking_not_attachable', 'لم يعد الطلب يقبل صورًا جديدة في هذه المرحلة.'],
+]
+
+function actionError(error: { message?: string }, fallback: string) {
+  const message = error.message?.toLowerCase() ?? ''
+  return new Error(actionErrors.find(([code]) => message.includes(code))?.[1] ?? fallback)
+}
 
 
 export async function getLiveCatalog(): Promise<{ categories: ServiceCategory[]; services: Service[] }> {
@@ -159,7 +192,9 @@ export async function completeGoogleProfile(input: { role: Extract<Role, 'custom
 }
 
 export async function signOutAccount() {
-  if (supabase) await supabase.auth.signOut()
+  if (!supabase) return
+  const { error } = await supabase.auth.signOut()
+  if (error) throw new Error(error.message || 'تعذر تسجيل الخروج بأمان.')
 }
 
 export async function createBookingFromDraft(draft: BookingDraft, serviceSlug: string, policyAccepted = false) {
@@ -190,7 +225,7 @@ export async function createBookingFromDraft(draft: BookingDraft, serviceSlug: s
 
 export async function getMyBookings() {
   if (!supabase) return { data: [], error: null }
-  return supabase.from('bookings').select('id, booking_number, status, payment_status, city, district, address_text, latitude, longitude, issue_description, scheduled_date, scheduled_slot, price_snapshot, created_at, services(name_ar, slug), payments(id,invoice_number,amount,status,payment_method,receipt_reference,review_note)').order('created_at', { ascending: false }).limit(50)
+  return supabase.from('bookings').select('id, booking_number, status, payment_status, cancellation_reason, city, district, address_text, latitude, longitude, issue_description, scheduled_date, scheduled_slot, price_snapshot, created_at, services(name_ar, slug), payments(id,invoice_number,amount,status,payment_method,receipt_reference,review_note), booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').order('created_at', { ascending: false }).limit(50)
 }
 
 
@@ -223,7 +258,7 @@ export async function getMyProviderProfile() {
 
 export async function getProviderWorkQueue() {
   if (!supabase) return { data: [], error: null }
-  return supabase.from('bookings').select('id,booking_number,status,city,district,address_text,access_notes,latitude,longitude,issue_description,scheduled_date,scheduled_slot,price_snapshot,provider_amount_snapshot,created_at,services(name_ar,pricing_type,base_price),profiles!bookings_customer_id_fkey(full_name,phone),booking_quotes(id,amount,note,status,created_at)').eq('provider_id', (await supabase.auth.getUser()).data.user?.id ?? '').order('created_at', { ascending: false }).limit(50)
+  return supabase.from('bookings').select('id,booking_number,status,payment_status,cancellation_reason,city,district,address_text,access_notes,latitude,longitude,issue_description,scheduled_date,scheduled_slot,price_snapshot,provider_amount_snapshot,created_at,services(name_ar,pricing_type,base_price),profiles!bookings_customer_id_fkey(full_name,phone),booking_quotes(id,amount,note,status,admin_review_note,created_at),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').eq('provider_id', (await supabase.auth.getUser()).data.user?.id ?? '').order('created_at', { ascending: false }).limit(50)
 }
 
 export async function getProviderLedger() {
@@ -417,9 +452,9 @@ export async function getAdminDocumentUrl(documentType: string, path: string, do
 export async function getAdminOperations() {
   if (!supabase) return { recent: [], assignable: [], providers: [] }
   const [recentResult, assignableResult, providerResult] = await Promise.all([
-    supabase.from('bookings').select('id,booking_number,service_id,status,city,district,address_text,latitude,longitude,issue_description,created_at,services(name_ar),profiles!bookings_customer_id_fkey(full_name,phone)').order('created_at', { ascending: false }).limit(20),
-    supabase.from('bookings').select('id,booking_number,service_id,status,city,district,address_text,latitude,longitude,issue_description,created_at,services(name_ar),profiles!bookings_customer_id_fkey(full_name,phone)').is('provider_id', null).in('status', ['pending', 'quoted', 'accepted']).order('created_at', { ascending: true }).limit(100),
-    supabase.from('provider_profiles').select('user_id,profiles(full_name),provider_services(service_id,is_active,services(id,name_ar,category_id))').eq('approval_status', 'approved').order('created_at', { ascending: true }).limit(100),
+    supabase.from('bookings').select('id,booking_number,service_id,status,payment_status,cancellation_reason,provider_id,city,district,address_text,latitude,longitude,issue_description,created_at,services(name_ar),profiles!bookings_customer_id_fkey(full_name,phone),provider_profiles(profiles(full_name)),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').order('created_at', { ascending: false }).limit(20),
+    supabase.from('bookings').select('id,booking_number,service_id,status,payment_status,cancellation_reason,provider_id,city,district,address_text,latitude,longitude,issue_description,created_at,services(name_ar),profiles!bookings_customer_id_fkey(full_name,phone),provider_profiles(profiles(full_name)),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').is('provider_id', null).in('status', ['pending', 'quoted', 'accepted']).order('created_at', { ascending: true }).limit(100),
+    supabase.from('provider_profiles').select('user_id,profiles(full_name,is_active),provider_services(service_id,is_active,services(id,name_ar,category_id))').eq('approval_status', 'approved').order('created_at', { ascending: true }).limit(100),
   ])
   if (recentResult.error) throw recentResult.error
   if (assignableResult.error) throw assignableResult.error
@@ -428,16 +463,10 @@ export async function getAdminOperations() {
 }
 
 export async function getAdminOverview() {
-  if (!supabase) return { bookings: 0, approvedProviders: 0, paidAmount: 0, openComplaints: 0 }
-  const [bookings, providers, payments] = await Promise.all([
-    supabase.from('bookings').select('id', { count: 'exact', head: true }),
-    supabase.from('provider_profiles').select('user_id', { count: 'exact', head: true }).eq('approval_status', 'approved'),
-    supabase.from('payments').select('amount').eq('status', 'paid').limit(500),
-  ])
-  if (bookings.error) throw bookings.error
-  if (providers.error) throw providers.error
-  if (payments.error) throw payments.error
-  return { bookings: bookings.count ?? 0, approvedProviders: providers.count ?? 0, paidAmount: (payments.data ?? []).reduce((sum, item) => sum + Number(item.amount || 0), 0), openComplaints: 0 }
+  if (!supabase) return { bookings: 0, approvedProviders: 0, paidAmount: 0, openInvoices: 0, pendingQuotes: 0, unassignedBookings: 0 }
+  const { data, error } = await supabase.rpc('admin_get_dashboard_metrics')
+  if (error) throw new Error(error.message || 'تعذر تحميل مؤشرات الإدارة.')
+  return data ?? { bookings: 0, approvedProviders: 0, paidAmount: 0, openInvoices: 0, pendingQuotes: 0, unassignedBookings: 0 }
 }
 
 export async function reviewProviderVerification(providerId: string, status: 'approved' | 'rejected') {
@@ -449,15 +478,16 @@ export async function reviewProviderVerification(providerId: string, status: 'ap
 
 export async function assignBookingToProvider(bookingId: string, providerId: string) {
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
-  const { data, error } = await supabase.rpc('assign_booking', { p_booking_id: bookingId, p_provider_id: providerId })
-  if (error) throw new Error(error.message || 'تعذر إسناد الطلب.')
+  const { data, error } = await supabase.rpc('admin_assign_booking_safe', { p_booking_id: bookingId, p_provider_id: providerId })
+  if (error) throw actionError(error, 'تعذر إسناد الطلب. تحقق من موعد الفني وتخصصه وحاول مجددًا.')
   return data
 }
 
-export async function addProviderLedgerEntry(providerId: string, bookingId: string | null, entryType: 'earning' | 'late_penalty' | 'adjustment' | 'payout', amount: number, note: string) {
+export async function addProviderLedgerEntry(providerId: string, bookingId: string | null, entryType: 'late_penalty' | 'adjustment' | 'payout', amount: number, note: string) {
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
-  const { data, error } = await supabase.rpc('add_provider_ledger_entry', { p_provider_id: providerId, p_booking_id: bookingId, p_entry_type: entryType, p_amount: amount, p_note: note })
-  if (error) throw new Error(error.message || 'تعذر حفظ القيد المالي.')
+  if (!Number.isFinite(amount) || amount === 0 || ((entryType === 'payout' || entryType === 'late_penalty') && amount < 0)) throw new Error('أدخل مبلغًا موجبًا للصرف أو غرامة التأخير.')
+  const { data, error } = await supabase.rpc('add_provider_ledger_entry_safe', { p_provider_id: providerId, p_booking_id: bookingId, p_entry_type: entryType, p_amount: amount, p_note: note })
+  if (error) throw actionError(error, 'تعذر حفظ القيد المالي. تحقق من رصيد الفني والمبلغ والسبب.')
   return data
 }
 
@@ -474,22 +504,22 @@ export async function ensureProviderProfile(explicitRole?: 'provider') {
 
 export async function advanceProviderBooking(bookingId: string) {
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
-  const { data, error } = await supabase.rpc('provider_advance_booking', { p_booking_id: bookingId })
-  if (error) throw new Error(error.message || 'تعذر تحديث حالة المهمة.')
+  const { data, error } = await supabase.rpc('provider_advance_booking_safe', { p_booking_id: bookingId })
+  if (error) throw actionError(error, 'تعذر تحديث حالة المهمة. تحقّق من اتصالك وحاول مجددًا.')
   return data
 }
 
 export async function submitProviderQuote(bookingId: string, amount: number, note: string) {
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
-  const { data, error } = await supabase.rpc('provider_submit_quote', { p_booking_id: bookingId, p_amount: amount, p_note: note })
-  if (error) throw new Error(error.message || 'تعذر إرسال السعر إلى الإدارة.')
+  const { data, error } = await supabase.rpc('provider_submit_quote_safe', { p_booking_id: bookingId, p_amount: amount, p_note: note })
+  if (error) throw actionError(error, 'تعذر إرسال السعر إلى الإدارة. راجع حالة المهمة وحاول مجددًا.')
   return data
 }
 
 export async function finishFixedPriceBooking(bookingId: string) {
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
-  const { data, error } = await supabase.rpc('provider_finish_fixed_booking', { p_booking_id: bookingId })
-  if (error) throw new Error(error.message || 'تعذر إنهاء المهمة وإصدار الفاتورة.')
+  const { data, error } = await supabase.rpc('provider_finish_fixed_booking_safe', { p_booking_id: bookingId })
+  if (error) throw actionError(error, 'تعذر إنهاء المهمة وإصدار الفاتورة. حدّث بيانات الطلب وحاول مجددًا.')
   return data
 }
 
@@ -500,8 +530,8 @@ export async function getAdminQuotes() {
 
 export async function acceptProviderQuote(quoteId: string) {
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
-  const { data, error } = await supabase.rpc('admin_accept_booking_quote', { p_quote_id: quoteId })
-  if (error) throw new Error(error.message || 'تعذر اعتماد السعر وإصدار الفاتورة.')
+  const { data, error } = await supabase.rpc('admin_accept_booking_quote_safe', { p_quote_id: quoteId })
+  if (error) throw actionError(error, 'تعذر اعتماد السعر أو إصدار الفاتورة. تحقق من حالة العرض أولًا.')
   return data
 }
 
@@ -512,22 +542,22 @@ export async function getAdminPayments() {
 
 export async function reviewInvoicePayment(paymentId: string, paid: boolean, note = '') {
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
-  const { data, error } = await supabase.rpc('admin_review_invoice_payment', { p_payment_id: paymentId, p_paid: paid, p_note: note })
-  if (error) throw new Error(error.message || 'تعذر تحديث حالة الفاتورة.')
+  const { data, error } = await supabase.rpc('admin_review_invoice_payment_safe', { p_payment_id: paymentId, p_paid: paid, p_note: note })
+  if (error) throw actionError(error, 'تعذر تحديث حالة الفاتورة. حدّث القائمة وحاول مجددًا.')
   return data
 }
 
 export async function chooseInvoicePayment(paymentId: string, method: 'cash' | 'bank_transfer') {
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
-  const { data, error } = await supabase.rpc('customer_select_invoice_payment', { p_payment_id: paymentId, p_method: method })
-  if (error) throw new Error(error.message || 'تعذر حفظ وسيلة الدفع.')
+  const { data, error } = await supabase.rpc('customer_select_invoice_payment_safe', { p_payment_id: paymentId, p_method: method })
+  if (error) throw actionError(error, 'تعذر حفظ وسيلة الدفع. حدّث الفاتورة وحاول مجددًا.')
   return data
 }
 
 export async function submitTransferReference(paymentId: string, reference: string) {
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
-  const { data, error } = await supabase.rpc('customer_submit_transfer_reference', { p_payment_id: paymentId, p_reference: reference })
-  if (error) throw new Error(error.message || 'تعذر إرسال مرجع التحويل.')
+  const { data, error } = await supabase.rpc('customer_submit_transfer_reference_safe', { p_payment_id: paymentId, p_reference: reference })
+  if (error) throw actionError(error, 'تعذر إرسال مرجع التحويل. تحقّق من الرقم وحاول مجددًا.')
   return data
 }
 
@@ -598,7 +628,99 @@ export async function getProviderSpecialties() {
 
 export async function saveProviderSpecialties(serviceIds: string[]) {
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
-  const { data, error } = await supabase.rpc('provider_set_specialties', { p_service_ids: serviceIds })
-  if (error) throw new Error(error.message || 'تعذر حفظ تخصصات الفني.')
+  const { data, error } = await supabase.rpc('provider_set_specialties_review_safe', { p_service_ids: serviceIds })
+  if (error) throw actionError(error, 'تعذر حفظ تخصصات الفني. حدّث الصفحة وحاول مجددًا.')
+  return data
+}
+
+
+export async function uploadBookingPhotos(bookingId: string, files: File[]) {
+  if (!supabase) throw new Error('خدمة رفع الصور غير متاحة الآن.')
+  if (!bookingId) throw new Error('رقم الطلب غير صالح.')
+  if (files.length > 5) throw new Error('يمكن رفع 5 صور كحد أقصى لكل طلب.')
+  const userId = (await supabase.auth.getUser()).data.user?.id
+  if (!userId) throw new Error('سجّل الدخول لرفع صور العطل.')
+  let uploaded = 0
+  const failures: string[] = []
+  for (const file of files) {
+    let path = ''
+    try {
+      const blob = await prepareBookingPhoto(file)
+      const hash = await sha256Hex(blob)
+      path = `${userId}/${bookingId}/${hash}.jpg`
+      let result = await supabase.storage.from('booking-attachments').upload(path, blob, { contentType: 'image/jpeg', upsert: false })
+      if (result.error && !/already exists|duplicate|conflict/i.test(result.error.message)) throw result.error
+      const registered = await supabase.rpc('register_booking_attachment_safe', { p_booking_id: bookingId, p_storage_path: path, p_file_size_bytes: blob.size })
+      if (registered.error) throw registered.error
+      uploaded += 1
+    } catch (error) {
+      failures.push(file.name || 'صورة')
+      if (path) {
+        try {
+          const check = await supabase.from('booking_attachments').select('id').eq('storage_path', path).maybeSingle()
+          if (!check.error && !check.data) await supabase.storage.from('booking-attachments').remove([path])
+        } catch { /* orphan cleanup is best effort */ }
+      }
+    }
+  }
+  return { uploaded, failures }
+}
+
+export async function getBookingAttachmentUrl(path: string) {
+  if (!supabase) throw new Error('خدمة الصور غير متاحة الآن.')
+  const { data, error } = await supabase.storage.from('booking-attachments').createSignedUrl(path, 300)
+  if (error || !data?.signedUrl) throw new Error('الصورة غير متاحة أو لا تملك صلاحية عرضها.')
+  return data.signedUrl
+}
+
+export async function updateMyAccountProfile(input: { fullName: string; phone: string; city: string; yearsExperience?: number; serviceDescription?: string }) {
+  if (!supabase) throw new Error('خدمة الحساب غير متاحة الآن.')
+  const { data, error } = await supabase.rpc('update_my_account_profile_safe', {
+    p_full_name: input.fullName.trim(), p_phone: input.phone.trim(), p_city: input.city.trim(),
+    p_years: input.yearsExperience ?? null, p_service_description: input.serviceDescription ?? null,
+  })
+  if (error) {
+    const code = error.message.toLowerCase()
+    const messages: Record<string, string> = { invalid_full_name: 'أدخل اسمًا من حرفين إلى 160 حرفًا.', invalid_phone: 'أدخل رقم جوال صحيحًا.', invalid_city: 'اسم المدينة أطول من الحد المسموح.', invalid_experience_years: 'سنوات الخبرة يجب أن تكون بين 0 و70.', invalid_service_description: 'أضف نبذة مهنية لا تقل عن 10 أحرف.' }
+    const match = Object.keys(messages).find((key) => code.includes(key))
+    throw new Error(match ? messages[match] : `تعذر حفظ بيانات الحساب: ${error.message}`)
+  }
+  return data
+}
+
+export async function cancelCustomerBooking(bookingId: string, reason: string) {
+  if (!supabase) throw new Error('تعذر إلغاء الطلب الآن.')
+  const { data, error } = await supabase.rpc('customer_cancel_booking_safe', { p_booking_id: bookingId, p_reason: reason.trim() })
+  if (error) throw actionError(error, 'تعذر إلغاء الطلب. حدّث الحالة وحاول مجددًا.')
+  return data
+}
+export async function adminReassignBooking(bookingId: string, providerId: string, note: string) {
+  if (!supabase) throw new Error('تعذر إعادة إسناد الطلب الآن.')
+  const { data, error } = await supabase.rpc('admin_reassign_booking_safe', { p_booking_id: bookingId, p_provider_id: providerId, p_note: note.trim() })
+  if (error) throw actionError(error, 'تعذر إعادة إسناد الطلب. راجع الفني والحالة وحاول مجددًا.')
+  return data
+}
+export async function adminUnassignBooking(bookingId: string, note: string) {
+  if (!supabase) throw new Error('تعذر فك إسناد الطلب الآن.')
+  const { data, error } = await supabase.rpc('admin_unassign_booking_safe', { p_booking_id: bookingId, p_note: note.trim() })
+  if (error) throw actionError(error, 'تعذر فك إسناد الطلب. راجع حالة الطلب وحاول مجددًا.')
+  return data
+}
+export async function adminCancelBooking(bookingId: string, reason: string) {
+  if (!supabase) throw new Error('تعذر إغلاق الطلب الآن.')
+  const { data, error } = await supabase.rpc('admin_cancel_booking_safe', { p_booking_id: bookingId, p_reason: reason.trim() })
+  if (error) throw actionError(error, 'تعذر إغلاق الطلب. راجع حالة التنفيذ والفاتورة.')
+  return data
+}
+export async function rejectProviderQuote(quoteId: string, note: string) {
+  if (!supabase) throw new Error('تعذر رفض عرض السعر الآن.')
+  const { data, error } = await supabase.rpc('admin_reject_booking_quote_safe', { p_quote_id: quoteId, p_note: note.trim() })
+  if (error) throw actionError(error, 'تعذر رفض عرض السعر. حدّث قائمة العروض وحاول مجددًا.')
+  return data
+}
+export async function getAdminOperationalReport(from?: string, to?: string) {
+  if (!supabase) return null
+  const { data, error } = await supabase.rpc('admin_get_operational_report', { p_from: from || null, p_to: to || null })
+  if (error) throw actionError(error, 'تعذر تحميل التقرير التشغيلي. تحقق من الفترة المحددة وحاول مجددًا.')
   return data
 }
