@@ -29,4 +29,4 @@
 
 ## سجل الإصدار
 
-تُدفع التغييرات إلى `main` مباشرة وفق تفويضك السابق؛ يُحدَّث هنا رقم commit وحالة Vercel Production بعد انتهاء فحص النشر. مرجع التحليل الكامل: [PROJECT_AUDIT_AND_ROADMAP.md](PROJECT_AUDIT_AND_ROADMAP.md).
+دُفع إصدار الميزات مباشرة إلى `main` بالالتزام `8b0e074`، وأصبح Vercel Production بحالة **READY** على [home-macs191.vercel.app](https://home-macs191.vercel.app)؛ كما أعادت الصفحة الرئيسية والدخول وإكمال ملف Google ومسارات إعدادات العميل والفني وmanifest الحالة HTTP 200. مرجع التحليل الكامل: [PROJECT_AUDIT_AND_ROADMAP.md](PROJECT_AUDIT_AND_ROADMAP.md).
