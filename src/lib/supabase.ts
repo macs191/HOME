@@ -253,7 +253,21 @@ export async function getMyProviderProfile() {
   if (!supabase) return { data: null, error: new Error('الخدمة غير متاحة الآن.') }
   const userId = (await supabase.auth.getUser()).data.user?.id
   if (!userId) return { data: null, error: new Error('تسجيل الدخول مطلوب.') }
-  return supabase.from('provider_profiles').select('approval_status,years_experience,service_description,onboarding_completed,default_commission_rate,profiles(full_name,phone,city)').eq('user_id', userId).maybeSingle()
+  return supabase.from('provider_profiles').select('approval_status,availability_status,location_sharing_enabled,years_experience,service_description,onboarding_completed,default_commission_rate,profiles(full_name,phone,city)').eq('user_id', userId).maybeSingle()
+}
+
+export async function updateProviderLocation(latitude: number, longitude: number, accuracyMeters?: number | null) {
+  if (!supabase) throw new Error('خدمة الموقع غير متاحة الآن.')
+  const { data, error } = await supabase.rpc('provider_update_location', { p_latitude: latitude, p_longitude: longitude, p_accuracy_meters: accuracyMeters ?? null })
+  if (error) throw actionError(error, 'تعذر تحديث موقعك. تحقق من إذن الموقع وحاول مرة أخرى.')
+  return data
+}
+
+export async function setProviderAvailability(status: 'available' | 'busy' | 'offline') {
+  if (!supabase) throw new Error('خدمة التوافر غير متاحة الآن.')
+  const { data, error } = await supabase.rpc('provider_set_availability', { p_status: status })
+  if (error) throw actionError(error, 'تعذر تحديث حالة التوافر.')
+  return data
 }
 
 export async function getProviderWorkQueue() {
@@ -454,7 +468,7 @@ export async function getAdminOperations() {
   const [recentResult, assignableResult, providerResult] = await Promise.all([
     supabase.from('bookings').select('id,booking_number,service_id,status,payment_status,cancellation_reason,provider_id,city,district,address_text,latitude,longitude,issue_description,created_at,services(name_ar),profiles!bookings_customer_id_fkey(full_name,phone),provider_profiles(profiles(full_name)),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').order('created_at', { ascending: false }).limit(20),
     supabase.from('bookings').select('id,booking_number,service_id,status,payment_status,cancellation_reason,provider_id,city,district,address_text,latitude,longitude,issue_description,created_at,services(name_ar),profiles!bookings_customer_id_fkey(full_name,phone),provider_profiles(profiles(full_name)),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').is('provider_id', null).in('status', ['pending', 'quoted', 'accepted']).order('created_at', { ascending: true }).limit(100),
-    supabase.from('provider_profiles').select('user_id,profiles(full_name,is_active),provider_services(service_id,is_active,services(id,name_ar,category_id))').eq('approval_status', 'approved').order('created_at', { ascending: true }).limit(100),
+    supabase.from('provider_profiles').select('user_id,availability_status,location_sharing_enabled,profiles(full_name,is_active),provider_locations(latitude,longitude,captured_at,expires_at),provider_services(service_id,is_active,services(id,name_ar,category_id))').eq('approval_status', 'approved').order('created_at', { ascending: true }).limit(100),
   ])
   if (recentResult.error) throw recentResult.error
   if (assignableResult.error) throw assignableResult.error
@@ -480,6 +494,13 @@ export async function assignBookingToProvider(bookingId: string, providerId: str
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('admin_assign_booking_safe', { p_booking_id: bookingId, p_provider_id: providerId })
   if (error) throw actionError(error, 'تعذر إسناد الطلب. تحقق من موعد الفني وتخصصه وحاول مجددًا.')
+  return data
+}
+
+export async function autoAssignBookingToNearestProvider(bookingId: string) {
+  if (!supabase) throw new Error('تعذر تشغيل المطابقة التلقائية الآن.')
+  const { data, error } = await supabase.rpc('admin_auto_assign_nearest_booking', { p_booking_id: bookingId })
+  if (error) throw actionError(error, 'تعذر تشغيل المطابقة التلقائية. حدّث الطلبات وحاول مجددًا.')
   return data
 }
 
