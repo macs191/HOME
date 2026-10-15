@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Bell, Check, ChevronLeft, FileText, Gauge, Layers3, LogOut, MapPin, Navigation, Search, Send, Settings2, ShieldCheck, TicketPercent, TrendingUp, UsersRound, WalletCards, X } from 'lucide-react'
 import { AdminMarketplacePanel } from './AdminMarketplacePanel'
 import { AdminAccountsPanel } from './AdminAccountsPanel'
@@ -22,6 +22,7 @@ const sectionTitle: Record<Section, string> = { overview: 'نظرة عامة', o
 
 export function AdminWorkspace() {
   const { section: rawSection } = useParams()
+  const [searchParams] = useSearchParams()
   const section: Section = navItems.some((item) => item.id === rawSection) ? rawSection as Section : 'overview'
   const navigate = useNavigate(); const location = useLocation()
   const [overview, setOverview] = useState<any>(null)
@@ -32,6 +33,7 @@ export function AdminWorkspace() {
   const [amount, setAmount] = useState(''); const [note, setNote] = useState('')
   const [commissionInputs, setCommissionInputs] = useState<Record<string,string>>({})
   const [message, setMessage] = useState(''); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false)
+  useEffect(() => { if (section === 'operations') { const requested = searchParams.get('booking'); if (requested) setBookingId(requested) } }, [section, searchParams])
   const selected = operations.assignable.find((row) => row.id === bookingId)
   const eligibleProviders = useMemo(() => selected ? operations.providers.filter((provider) => provider.profiles?.is_active === true && (provider.provider_services ?? []).some((skill: any) => skill.is_active && skill.service_id === selected.service_id)) : [], [selected, operations.providers])
 
@@ -54,7 +56,7 @@ export function AdminWorkspace() {
     finally { setBusy(false) }
   }
   const assign = () => { if (!bookingId || !providerId) return; void run(() => assignBookingToProvider(bookingId, providerId), 'تم إسناد الطلب للفني.', true).then((saved) => { if (saved) { setBookingId(''); setProviderId('') } }) }
-  const autoAssign = () => { if (!bookingId) return; void run(() => autoAssignBookingToNearestProvider(bookingId), 'تم تشغيل المطابقة التلقائية حسب التخصص والموقع والتوافر.', true).then((saved) => { if (saved) setBookingId('') }) }
+  const autoAssign = () => { if (!bookingId) return; void run(() => autoAssignBookingToNearestProvider(bookingId), 'تم تشغيل المطابقة التلقائية حسب التخصص والموقع الأساسي ضمن 50 كم.', true).then((saved) => { if (saved) setBookingId('') }) }
   const addLedger = () => {
     if (!providerId || !Number.isFinite(Number(amount)) || Number(amount) === 0 || !note.trim()) { setMessage('اختر فنيًا، وأدخل مبلغًا غير صفري وسببًا واضحًا.'); return }
     void run(() => addProviderLedgerEntry(providerId, bookingId || null, entryType, Number(amount), note), 'تم حفظ القيد المالي في سجل الفني.', false).then((saved) => { if (saved) { setAmount(''); setNote('') } })
@@ -77,7 +79,7 @@ export function AdminWorkspace() {
           ['الطلبات المسجلة', String(overview?.bookings ?? 0), FileText], ['الفنيون المعتمدون', String(overview?.approvedProviders ?? 0), UsersRound],
           ['قيمة التحصيل', overview?.paidAmount ? `${Number(overview.paidAmount).toFixed(2)} ر.س` : '—', WalletCards], ['طلبات بلا إسناد', String(operations.assignable.length), Layers3],
         ].map(([label, value, Icon]: any) => <div className="metric-card" key={label}><span className="metric-icon"><Icon size={18} /></span><span className="muted">{label}</span><strong>{value}</strong></div>)}</div>
-          <section className="panel"><div className="panel-heading"><div><span className="eyebrow">آخر النشاط</span><h2>الطلبات الأخيرة</h2></div><Link className="text-link" to="/admin/operations">فتح الطلبات والإسناد <ArrowLeft size={15} /></Link></div>{operations.recent.length ? <div className="booking-list">{operations.recent.map((item) => <article className="booking-row" key={item.id}><div><span className="eyebrow">طلب #{item.booking_number}</span><h3>{item.services?.name_ar ?? 'خدمة منزلية'}</h3><p>{item.profiles?.full_name ?? 'عميل'} · {item.profiles?.phone ?? 'بدون رقم'} · {item.city}</p></div><span className="status-pill">{item.status}</span></article>)}</div> : <p className="empty-inline">لا توجد طلبات حتى الآن.</p>}</section>
+          <section className="panel"><div className="panel-heading"><div><span className="eyebrow">آخر النشاط</span><h2>الطلبات الأخيرة</h2></div><Link className="text-link" to="/admin/operations">فتح الطلبات والإسناد <ArrowLeft size={15} /></Link></div>{operations.recent.length ? <div className="booking-list">{operations.recent.map((item) => <Link className="booking-row admin-booking-link" to={`/admin/operations?booking=${item.id}`} key={item.id}><div><span className="eyebrow">طلب #{item.booking_number}</span><h3>{item.services?.name_ar ?? 'خدمة منزلية'}</h3><p>{item.profiles?.full_name ?? 'عميل'} · {item.profiles?.phone ?? 'بدون رقم'} · {item.city}</p><small>اضغط لفتح الإسناد والصور والتحكم</small></div><span className="status-pill">{item.status}</span></Link>)}</div> : <p className="empty-inline">لا توجد طلبات حتى الآن.</p>}</section>
           <div className="admin-shortcuts">{navItems.filter((item) => item.id !== 'overview').map(({ id,label,icon:Icon }) => <Link className="admin-shortcut" key={id} to={`/admin/${id}`}><Icon size={18} /><strong>{label}</strong><ChevronLeft size={15} /></Link>)}</div></>}
         {!loading && section === 'operations' && <section className="panel admin-operations"><div className="panel-heading"><div><span className="eyebrow">التشغيل</span><h2>إسناد طلب لفني معتمد</h2><p className="muted">يعرض الاختيار فنيين معتمدين مسجلين بالتخصص المطابق فقط.</p></div></div>
           <div className="field-grid"><label className="field-label">الطلب<select value={bookingId} onChange={(e) => { setBookingId(e.target.value); setProviderId('') }}><option value="">اختر طلبًا غير مسند</option>{operations.assignable.map((row) => <option key={row.id} value={row.id}>#{row.booking_number} · {row.services?.name_ar ?? 'خدمة'} · {row.city}</option>)}</select></label><label className="field-label">الفني المطابق<select value={providerId} onChange={(e) => setProviderId(e.target.value)} disabled={!bookingId}><option value="">اختر فنيًا</option>{eligibleProviders.map((row) => <option key={row.user_id} value={row.user_id}>{row.profiles?.full_name ?? 'فني'}</option>)}</select></label></div>

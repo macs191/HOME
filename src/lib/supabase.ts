@@ -36,7 +36,7 @@ const actionErrors: Array<[string, string]> = [
   ['quote_not_pending', 'تمت مراجعة هذا العرض أو تغيّرت حالته. حدّث قائمة العروض.'],
   ['payment_rejection_reason_required', 'اكتب سبب رفض التحويل قبل التأكيد.'],
   ['paid_payment_cannot_be_reversed', 'لا يمكن إلغاء تحصيل مسجل؛ يلزم تسجيل عملية استرداد مستقلة.'],
-  ['attachment_limit_reached', 'وصل الطلب إلى الحد الأقصى البالغ 5 صور.'],
+  ['attachment_limit_reached', 'وصل الطلب إلى الحد الأقصى البالغ 3 صور.'],
   ['booking_not_attachable', 'لم يعد الطلب يقبل صورًا جديدة في هذه المرحلة.'],
 ]
 
@@ -644,7 +644,7 @@ export async function saveProviderSpecialties(serviceIds: string[]) {
 export async function uploadBookingPhotos(bookingId: string, files: File[]) {
   if (!supabase) throw new Error('خدمة رفع الصور غير متاحة الآن.')
   if (!bookingId) throw new Error('رقم الطلب غير صالح.')
-  if (files.length > 5) throw new Error('يمكن رفع 5 صور كحد أقصى لكل طلب.')
+  if (files.length > 3) throw new Error('يمكن رفع 3 صور كحد أقصى لكل طلب.')
   const userId = (await supabase.auth.getUser()).data.user?.id
   if (!userId) throw new Error('سجّل الدخول لرفع صور العطل.')
   let uploaded = 0
