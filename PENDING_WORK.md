@@ -13,7 +13,7 @@
 - رفض عرض الفني بسبب مكتوب، عرض السبب للفني، وإتاحة إعادة التسعير بعد الرفض. لا تُصدر الفاتورة إلا عبر مراجعة الإدارة.
 - حماية الدفتر المالي والفواتير: منع التكرار، رفض القيد اليدوي غير المتسق، مراجعة التحويلات بحواجز، وتسوية Stripe ذرّية ذات تحقق من الجلسة والـintent والمبلغ والعملة. لم يُجرَ دفع حقيقي.
 - مركز تقارير إداري بفترة زمنية، مؤشرات مجمعة خادميًا، وتصدير CSV. لا يعرض أرقام الشكاوى الوهمية.
-- migrations `booking_attachments_profile`, `booking_lifecycle_quotes`, `finance_reports_indexes`, `role_scoped_read_policies`, `rpc_wrappers_financial_guards`, و`final_transition_guards` مطبقة على Supabase. سياسات RLS وStorage وفحوص وجود bucket/RPCs راجعت بعد التطبيق.
+- migrations `booking_attachments_profile`, `booking_lifecycle_quotes`, `finance_reports_indexes`, `role_scoped_read_policies`, `rpc_wrappers_financial_guards`, و`final_transition_guards` مطبقة على Supabase. كما طُبقت migration تصحيحية `repair_provider_role_operator` بعد اكتشاف أن تعريف `ensure_provider_profile` الحي ظل يستخدم الاسم المحجوز `current_role` رغم تسجيل migration الإصلاح التاريخية؛ تم التحقق من تعريف الدالة الحي بعد التطبيق. سياسات RLS وStorage وفحوص وجود bucket/RPCs راجعت بعد التطبيق.
 - وظيفتا `create-checkout-session` و`stripe-webhook` منشورتان بالإصدار 4. فحص الوصول من دون جلسة أعاد 401 للدفع و400 لطلب webhook بلا توقيع، كما هو متوقع.
 - اجتازت `npm run typecheck` و`npm run build` و`git diff --check` وتحليل SQL المحلي. لقطات Chromium بعرضي 390px و320px لم تُظهر قصًا في الهيدر/الصفحة الرئيسية؛ تم إخفاء زر تثبيت مكرر من الهيدر الضيق مع إبقائه داخل القائمة.
 
