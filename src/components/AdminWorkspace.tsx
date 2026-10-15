@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Bell, Check, ChevronLeft, FileText, Gauge, Layers3, LogOut, MapPin, Navigation, Search, Send, Settings2, ShieldCheck, TicketPercent, UsersRound, WalletCards, X } from 'lucide-react'
+import { ArrowLeft, Bell, Check, ChevronLeft, FileText, Gauge, Layers3, LogOut, MapPin, Navigation, Search, Send, Settings2, ShieldCheck, TicketPercent, TrendingUp, UsersRound, WalletCards, X } from 'lucide-react'
 import { AdminMarketplacePanel } from './AdminMarketplacePanel'
 import { AdminAccountsPanel } from './AdminAccountsPanel'
 import { AdminBookingActions } from './AdminBookingActions'
@@ -14,7 +14,7 @@ import { InlineDocumentViewer } from './InlineDocumentViewer'
 type Section = 'overview' | 'operations' | 'reports' | 'accounts' | 'applications' | 'catalog' | 'quotes' | 'payments' | 'settings' | 'notifications'
 const navItems: { id: Section; label: string; icon: typeof Gauge }[] = [
   { id: 'overview', label: 'نظرة عامة', icon: Gauge }, { id: 'operations', label: 'الطلبات والإسناد', icon: FileText },
-  { id: 'reports', label: 'التقارير', icon: Gauge }, { id: 'accounts', label: 'العملاء والفنيون', icon: UsersRound }, { id: 'applications', label: 'طلبات اعتماد الفنيين', icon: ShieldCheck }, { id: 'catalog', label: 'الأقسام والخدمات', icon: Layers3 },
+  { id: 'reports', label: 'التقارير', icon: TrendingUp }, { id: 'accounts', label: 'العملاء والفنيون', icon: UsersRound }, { id: 'applications', label: 'طلبات اعتماد الفنيين', icon: ShieldCheck }, { id: 'catalog', label: 'الأقسام والخدمات', icon: Layers3 },
   { id: 'quotes', label: 'عروض الأسعار', icon: TicketPercent }, { id: 'payments', label: 'الفواتير والتحصيل', icon: WalletCards },
   { id: 'settings', label: 'إعدادات المنصة', icon: Settings2 }, { id: 'notifications', label: 'الإشعارات', icon: Bell },
 ]
