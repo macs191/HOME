@@ -119,3 +119,15 @@ $$;
 REVOKE ALL ON FUNCTION public.provider_submit_onboarding_with_certificate(text, integer, text, text, text, text, text, text, text, uuid[], numeric, numeric) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.provider_submit_onboarding_with_certificate(text, integer, text, text, text, text, text, text, text, uuid[], numeric, numeric) TO authenticated;
 REVOKE ALL ON FUNCTION public.auto_assign_nearest_provider(uuid) FROM PUBLIC, anon, authenticated;
+
+-- One-time compatibility backfill for providers that used the previous location table.
+UPDATE public.provider_profiles pp
+SET base_latitude = pl.latitude,
+    base_longitude = pl.longitude,
+    base_location_updated_at = coalesce(pl.captured_at, now()),
+    service_radius_km = 50,
+    updated_at = now()
+FROM public.provider_locations pl
+WHERE pp.user_id = pl.provider_id
+  AND pp.base_latitude IS NULL
+  AND pp.base_longitude IS NULL;
