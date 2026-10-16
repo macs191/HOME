@@ -243,11 +243,11 @@ export function LoginPage({ fixedRole }: { fixedRole?: MemberRole }) {
   return <main className="container auth-page auth-page-simple">
     <section className="auth-card auth-card-simple">
       <Link to="/" className="auth-brand auth-brand-simple" aria-label="هوم سيرفس - الرئيسية"><span className="auth-mark"><ShieldCheck size={21} /></span><strong>هوم سيرفس</strong></Link>
-      <span className="eyebrow">{fixedRole === 'provider' ? 'مساحة الفني' : fixedRole === 'customer' ? 'مساحة العميل' : 'حساب واحد، مساحة واضحة'}</span>
+      <span className="eyebrow">{fixedRole === 'provider' ? 'لوحة الفني' : fixedRole === 'customer' ? 'لوحة العميل' : 'حساب واحد، مساحة واضحة'}</span>
       <h1>{mode === 'signin' ? 'أهلًا بك من جديد' : 'أنشئ حسابك بسهولة'}</h1>
       <p className="muted auth-intro">{mode === 'signin' ? 'تابع طلباتك وخدماتك من مكان واحد.' : 'بياناتك محفوظة لتعود إلى طلباتك دون تكرار التسجيل.'}</p>
       <button type="button" className="button google-button google-primary button-wide" disabled={busy} onClick={() => void googleLogin()}><span className="google-g">G</span> المتابعة بحساب Google</button>
-      <p className="google-flow-note">إذا كان هذا حساب Google جديدًا، تختار بعد الدخول مساحة العميل أو الفني وتؤكد الاسم ورقم الهاتف.</p>
+      <p className="google-flow-note">إذا كان هذا حساب Google جديدًا، تختار بعد الدخول لوحة العميل أو الفني وتؤكد الاسم ورقم الهاتف.</p>
       <div className="auth-divider"><span>أو باستخدام البريد الإلكتروني</span></div>
       <div className="auth-switch" role="tablist" aria-label="حالة الحساب"><button type="button" role="tab" aria-selected={mode === 'signin'} className={mode === 'signin' ? 'active' : ''} onClick={() => { setMode('signin'); setError(''); setNotice('') }}>تسجيل الدخول</button><button type="button" role="tab" aria-selected={mode === 'signup'} className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setError(''); setNotice('') }}>إنشاء حساب</button></div>
       {mode === 'signup' && !fixedRole && <RoleChoice value={role} onChange={setRole} />}

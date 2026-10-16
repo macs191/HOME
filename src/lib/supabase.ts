@@ -145,6 +145,15 @@ export async function adminAssignProductOrder(orderId: string, providerId: strin
 export type AuthState = { session: Session | null; user: User | null }
 export type AppNotification = { id: string; title: string; body: string; notification_type: string; target_path: string | null; is_read: boolean; created_at: string }
 
+export async function subscribeToMyBookings(onChange: () => void, role: 'customer' | 'provider' = 'customer') {
+  if (!supabase) return () => undefined
+  const userId = (await supabase.auth.getUser()).data.user?.id
+  if (!userId) return () => undefined
+  const column = role === 'provider' ? 'provider_id' : 'customer_id'
+  const channel = supabase.channel(`bookings:${role}:${userId}:${crypto.randomUUID()}`).on('postgres_changes', { event: '*', schema: 'public', table: 'bookings', filter: `${column}=eq.${userId}` }, () => onChange()).subscribe()
+  return () => { void supabase?.removeChannel(channel) }
+}
+
 export async function subscribeToMyNotifications(onInsert: (notification: AppNotification) => void) {
   if (!supabase) return () => undefined
   const { data } = await supabase.auth.getUser()
@@ -252,7 +261,14 @@ export async function signOutAccount() {
   if (error) throw new Error(error.message || 'تعذر تسجيل الخروج بأمان.')
 }
 
-export async function createAdminManualBooking(input: { customerId: string; serviceId: string; providerId?: string; city: string; district: string; address: string; issue: string; urgency: 'normal' | 'urgent'; date?: string; slot?: string; price?: number }) {
+export async function createAdminManualProductOrder(input: { customerId: string; productIds: string[]; providerId?: string; installationRequested: boolean; city: string; district: string; address: string; notes: string }) {
+  if (!supabase) throw new Error('خدمة المتجر غير متاحة الآن.')
+  const { data, error } = await supabase.rpc('admin_create_manual_product_order', { p_customer_id: input.customerId, p_product_ids: input.productIds, p_provider_id: input.providerId || null, p_installation_requested: input.installationRequested, p_city: input.city, p_district: input.district, p_address_text: input.address, p_notes: input.notes })
+  if (error) throw new Error(error.message || 'تعذر إنشاء طلب المنتج.')
+  return data
+}
+
+export async function createAdminManualBooking(input: { customerId: string; serviceId: string; providerId?: string; city: string; district: string; address: string; issue: string; urgency: 'normal' | 'urgent'; date?: string; slot?: string; price?: number; productIds?: string[]; installationRequested?: boolean }) {
   if (!supabase) throw new Error('خدمة الطلبات غير متاحة الآن.')
   const { data, error } = await supabase.rpc('admin_create_manual_booking', { p_customer_id: input.customerId, p_service_id: input.serviceId, p_provider_id: input.providerId || null, p_city: input.city, p_district: input.district, p_address_text: input.address, p_issue_description: input.issue, p_urgency: input.urgency, p_scheduled_date: input.date || null, p_scheduled_slot: input.slot || null, p_price: input.price == null || Number.isNaN(input.price) ? null : input.price })
   if (error) throw new Error(error.message || 'تعذر إنشاء الطلب الإداري.')
@@ -620,6 +636,13 @@ export async function chooseInvoicePayment(paymentId: string, method: 'cash' | '
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('customer_select_invoice_payment_safe', { p_payment_id: paymentId, p_method: method })
   if (error) throw actionError(error, 'تعذر حفظ وسيلة الدفع. حدّث الفاتورة وحاول مجددًا.')
+  return data
+}
+
+export async function changeInvoicePayment(paymentId: string, method: 'cash' | 'bank_transfer') {
+  if (!supabase) throw new Error('خدمة الدفع غير متاحة الآن.')
+  const { data, error } = await supabase.rpc('customer_change_invoice_payment', { p_payment_id: paymentId, p_method: method })
+  if (error) throw new Error(error.message || 'تعذر تغيير طريقة الدفع.')
   return data
 }
 

@@ -84,7 +84,7 @@ export function Shell({ children, theme, onThemeChange }: { children: ReactNode;
     </div></header>
     {profileOpen && <div className="profile-hub-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setProfileOpen(false) }}><ProfileHub role={role} onClose={() => setProfileOpen(false)} onSignOut={() => void handleSignOut()} signingOut={signingOut} /></div>}
     <main>{children}</main>
-    <footer className="footer"><div className="container footer-grid"><div><BrandMark /><p className="muted footer-copy">منصة تربطك بفني مناسب، في الوقت المناسب.</p></div><div><strong>روابط سريعة</strong><Link to="/services">استعرض الخدمات</Link><Link to="/book">أنشئ طلبًا</Link></div><div><strong>حسابات المنصة</strong><Link to="/customer/login">دخول العملاء</Link><Link to="/provider/login">دخول الفنيين</Link><Link to="/admin">لوحة الإدارة</Link></div><div><strong>الدعم</strong><Link to="/customer/login">فتح مساحة العميل</Link></div></div><div className="container footer-bottom"><span>© 2026 هوم سيرفس</span></div></footer>
+    <footer className="footer"><div className="container footer-grid"><div><BrandMark /><p className="muted footer-copy">منصة تربطك بفني مناسب، في الوقت المناسب.</p></div><div><strong>روابط سريعة</strong><Link to="/services">استعرض الخدمات</Link><Link to="/book">أنشئ طلبًا</Link></div><div><strong>حسابات المنصة</strong><Link to="/customer/login">دخول العملاء</Link><Link to="/provider/login">دخول الفنيين</Link><Link to="/admin">لوحة الإدارة</Link></div><div><strong>الدعم</strong><Link to="/customer/login">فتح لوحة العميل</Link></div></div><div className="container footer-bottom"><span>© 2026 هوم سيرفس</span></div></footer>
     {installGuideOpen && <InstallGuide onClose={() => setInstallGuideOpen(false)} />}
   </div>
 }
