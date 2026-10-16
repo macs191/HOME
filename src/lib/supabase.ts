@@ -252,6 +252,13 @@ export async function signOutAccount() {
   if (error) throw new Error(error.message || 'تعذر تسجيل الخروج بأمان.')
 }
 
+export async function createAdminManualBooking(input: { customerId: string; serviceId: string; providerId?: string; city: string; district: string; address: string; issue: string; urgency: 'normal' | 'urgent'; date?: string; slot?: string; price?: number }) {
+  if (!supabase) throw new Error('خدمة الطلبات غير متاحة الآن.')
+  const { data, error } = await supabase.rpc('admin_create_manual_booking', { p_customer_id: input.customerId, p_service_id: input.serviceId, p_provider_id: input.providerId || null, p_city: input.city, p_district: input.district, p_address_text: input.address, p_issue_description: input.issue, p_urgency: input.urgency, p_scheduled_date: input.date || null, p_scheduled_slot: input.slot || null, p_price: input.price == null || Number.isNaN(input.price) ? null : input.price })
+  if (error) throw new Error(error.message || 'تعذر إنشاء الطلب الإداري.')
+  return data
+}
+
 export async function createBookingFromDraft(draft: BookingDraft, serviceSlug: string, policyAccepted = false) {
   if (!policyAccepted) throw new Error('يرجى تأكيد الموافقة على سياسة الطلب قبل الإرسال.')
   if (!supabase) throw new Error('تعذر إنشاء الطلب الآن. حاول مرة أخرى لاحقًا.')

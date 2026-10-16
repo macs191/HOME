@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Bell, Check, ChevronLeft, FileText, Gauge, Layers3, LogOut, MapPin, Navigation, Search, ShoppingBag, Send, Settings2, ShieldCheck, TicketPercent, TrendingUp, UsersRound, WalletCards, X } from 'lucide-react'
+import { ArrowLeft, Bell, Check, ChevronLeft, FilePlus, FileText, Gauge, Layers3, LogOut, MapPin, Navigation, Search, ShoppingBag, Send, Settings2, ShieldCheck, TicketPercent, TrendingUp, UsersRound, WalletCards, X } from 'lucide-react'
 import { AdminMarketplacePanel } from './AdminMarketplacePanel'
 import { AdminProductsPanel } from './AdminProductsPanel'
+import { AdminManualBookingPanel } from './AdminManualBookingPanel'
 import { AdminAccountsPanel } from './AdminAccountsPanel'
 import { AdminBookingActions } from './AdminBookingActions'
 import { AdminReportsPanel } from './AdminReportsPanel'
@@ -12,14 +13,14 @@ import { MobileBottomNav } from './MobileBottomNav'
 import { NotificationsPanel } from './NotificationsPanel'
 import { InlineDocumentViewer } from './InlineDocumentViewer'
 
-type Section = 'overview' | 'operations' | 'reports' | 'accounts' | 'applications' | 'catalog' | 'products' | 'quotes' | 'payments' | 'settings' | 'notifications'
+type Section = 'overview' | 'new-order' | 'operations' | 'reports' | 'accounts' | 'applications' | 'catalog' | 'products' | 'quotes' | 'payments' | 'settings' | 'notifications'
 const navItems: { id: Section; label: string; icon: typeof Gauge }[] = [
-  { id: 'overview', label: 'نظرة عامة', icon: Gauge }, { id: 'operations', label: 'الطلبات والإسناد', icon: FileText },
+  { id: 'overview', label: 'نظرة عامة', icon: Gauge }, { id: 'new-order', label: 'إضافة طلب', icon: FilePlus }, { id: 'operations', label: 'الطلبات والإسناد', icon: FileText },
   { id: 'reports', label: 'التقارير', icon: TrendingUp }, { id: 'accounts', label: 'العملاء والفنيون', icon: UsersRound }, { id: 'applications', label: 'طلبات اعتماد الفنيين', icon: ShieldCheck }, { id: 'catalog', label: 'الأقسام والخدمات', icon: Layers3 }, { id: 'products', label: 'متجر المنتجات', icon: ShoppingBag },
   { id: 'quotes', label: 'عروض الأسعار', icon: TicketPercent }, { id: 'payments', label: 'الفواتير والتحصيل', icon: WalletCards },
   { id: 'settings', label: 'إعدادات المنصة', icon: Settings2 }, { id: 'notifications', label: 'الإشعارات', icon: Bell },
 ]
-const sectionTitle: Record<Section, string> = { overview: 'نظرة عامة', operations: 'الطلبات والإسناد', reports: 'التقارير', accounts: 'العملاء والفنيون', applications: 'طلبات اعتماد الفنيين', catalog: 'الأقسام والخدمات', products: 'متجر المنتجات', quotes: 'عروض الأسعار', payments: 'الفواتير والتحصيل', settings: 'إعدادات المنصة', notifications: 'الإشعارات' }
+const sectionTitle: Record<Section, string> = { overview: 'نظرة عامة', 'new-order': 'إضافة طلب', operations: 'الطلبات والإسناد', reports: 'التقارير', accounts: 'العملاء والفنيون', applications: 'طلبات اعتماد الفنيين', catalog: 'الأقسام والخدمات', products: 'متجر المنتجات', quotes: 'عروض الأسعار', payments: 'الفواتير والتحصيل', settings: 'إعدادات المنصة', notifications: 'الإشعارات' }
 
 export function AdminWorkspace() {
   const { section: rawSection } = useParams()
@@ -72,7 +73,7 @@ export function AdminWorkspace() {
   const nav = <nav className="dashboard-nav-links" aria-label="أقسام الإدارة">{navItems.map(({ id, label, icon: Icon }) => <Link key={id} to={`/admin/${id}`} className={section === id ? 'active' : ''} aria-current={section === id ? 'page' : undefined}><Icon size={17} /><span>{label}</span><ChevronLeft size={15} className="nav-chevron" /></Link>)}</nav>
 
   return <div className="container dashboard-page admin-workspace"><div className="dashboard-top"><div><span className="eyebrow">إدارة المنصة</span><h1>{sectionTitle[section]}</h1><p className="muted">تحكم مستقل وواضح في كل جزء من تشغيل المنصة.</p></div><div className="dashboard-top-actions"><Link to="/services" className="button button-secondary button-small"><Search size={15} /> معاينة الخدمات</Link><button type="button" className="button button-secondary button-small mobile-admin-signout" onClick={handleSignout}><LogOut size={15} /> تسجيل الخروج</button></div></div>
-      <div className="dashboard-shell"><aside className="dashboard-nav"><div className="nav-user"><span className="user-avatar"><ShieldCheck size={18} /></span><div><strong>مدير المنصة</strong><small>إدارة العملاء والخدمات والطلبات</small></div></div>{nav}<div className="nav-bottom"><Link to="/" className="button button-secondary button-wide">العودة للموقع</Link><button type="button" onClick={handleSignout} className="nav-logout"><LogOut size={15} /> تسجيل الخروج</button></div></aside>
+      <div className="admin-top-nav">{nav}</div><div className="dashboard-shell"><aside className="dashboard-nav"><div className="nav-user"><span className="user-avatar"><ShieldCheck size={18} /></span><div><strong>مدير المنصة</strong><small>إدارة العملاء والخدمات والطلبات</small></div></div>{nav}<div className="nav-bottom"><Link to="/" className="button button-secondary button-wide">العودة للموقع</Link><button type="button" onClick={handleSignout} className="nav-logout"><LogOut size={15} /> تسجيل الخروج</button></div></aside>
       <main className="dashboard-content" key={section}>
         {message && <div className={message.startsWith('تعذر') ? 'inline-error' : 'success-note'} role={message.startsWith('تعذر') ? 'alert' : 'status'}>{message.startsWith('تعذر') ? <X size={16} /> : <Check size={16} />}{message}{message.startsWith('تعذر') && <button type="button" className="message-retry" onClick={() => void load()}>إعادة المحاولة</button>}</div>}
         {loading && ['overview','operations','applications'].includes(section) && <div className="panel loading-state">جارٍ تحميل بيانات {sectionTitle[section]}…</div>}
@@ -93,6 +94,7 @@ export function AdminWorkspace() {
         {!loading && section === 'accounts' && <AdminAccountsPanel />}
         {section === 'notifications' && <NotificationsPanel />}
         {!loading && section === 'reports' && <AdminReportsPanel />}
+        {section === 'new-order' && <AdminManualBookingPanel onCreated={() => void load()} />}
         {section === 'products' && <AdminProductsPanel />}
         {['catalog','quotes','payments','settings'].includes(section) && <AdminMarketplacePanel section={section as 'catalog'|'quotes'|'payments'|'settings'} />}
       </main>

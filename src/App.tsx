@@ -14,6 +14,7 @@ import { ProviderJobCard } from './components/ProviderJobCard'
 import { AdminMarketplacePanel } from './components/AdminMarketplacePanel'
 import { AdminWorkspace } from './components/AdminWorkspace'
 import { ProviderProductOrdersPanel, StorePage, StoreOrdersPanel } from './components/StorePage'
+import { VoiceAssistant } from './components/VoiceAssistant'
 import { GoogleProfileCompletionPage, LoginPage, OAuthCallbackPage } from './components/AuthPages'
 const MapPicker = lazy(() => import('./components/MapPicker').then((module) => ({ default: module.MapPicker })))
 import { categories, getCategory, getService, services } from './lib/data'
@@ -126,7 +127,7 @@ function BookingPage() {
   const { categories: serviceCategories, services: serviceList } = useCatalog()
   const [params] = useSearchParams()
   const serviceReturnPath = `/book${params.toString() ? `?${params.toString()}` : ''}`
-  const serviceParam = params.get('service') ?? undefined
+  const serviceParam = params.get('service') ?? params.get('assistantService') ?? undefined
   const navigate = useNavigate()
   const [authState, setAuthState] = useState<AuthState | null>(null)
   const [accountRole, setAccountRole] = useState<Role | null | undefined>(undefined)
@@ -189,9 +190,9 @@ function CustomerPage() {
   }
   useEffect(() => { void refreshBookings() }, [])
   useEffect(() => { let active = true; getMyNotifications().then(({ data, error }) => { if (!active) return; if (error) setMessage('تعذر تحميل الإشعارات الآن. حاول مرة أخرى.'); setNotifications((data as any[]) ?? []) }).catch(() => { if (active) setMessage('تعذر تحميل الإشعارات الآن. حاول مرة أخرى.') }); return () => { active = false } }, [])
-  if (routeSection && !['overview', 'orders', 'notifications', 'settings'].includes(routeSection)) return <Navigate to="/customer/overview" replace />
+  if (routeSection && !['overview', 'orders', 'store-orders', 'notifications', 'settings'].includes(routeSection)) return <Navigate to="/customer/overview" replace />
   return <DashboardLayout role="customer" eyebrow="مساحة العميل" title="مرحبًا بك، ابدأ من هنا." description="تابع طلباتك وفواتيرك وإشعاراتك من مساحة واحدة.">
-    <div className="dashboard-grid"><div className="dashboard-main">
+    <div className="dashboard-grid"><div className="dashboard-main"><VoiceAssistant />
       {customerSection === 'overview' && <><div className="quick-actions"><Link to="/book" className="quick-action primary"><span><Plus size={20} /></span><strong>إنشاء طلب جديد</strong><small>احجز خدمة منزلية</small><ArrowUpLeft size={17} /></Link><Link to="/customer/orders" className="quick-action"><span><FileText size={20} /></span><strong>طلباتي الحالية</strong><small>راجع الحالة والصور والفواتير</small><ArrowUpLeft size={17} /></Link><Link to="/store" className="quick-action"><span><ShoppingBag size={20} /></span><strong>متجر المنتجات</strong><small>اطلب منتجًا أو تركيبًا</small><ArrowUpLeft size={17} /></Link><Link to="/customer/settings" className="quick-action"><span><UserRound size={20} /></span><strong>إعدادات الحساب</strong><small>حدّث بياناتك الأساسية</small><ArrowUpLeft size={17} /></Link></div><section className="panel dashboard-accessible-note"><h2>مساحتك جاهزة للمتابعة</h2><p className="muted">يمكنك الوصول إلى طلباتك وإعدادات الحساب من القائمة الجانبية أو أزرار المساحة.</p><Link className="text-link" to="/customer/orders">فتح الطلبات <ArrowLeft size={15} /></Link></section></>}
       {customerSection === 'store-orders' && <StoreOrdersPanel />}
       {customerSection === 'orders' && <div className="panel" id="orders"><SectionTitle title="طلباتك الأخيرة" action={<StatusPill>{bookings.length} طلبات</StatusPill>} />{message && <div className="inline-error" role="alert"><X size={16} />{message}</div>}{loading ? <div className="loading-state">جارٍ تحميل طلباتك...</div> : bookings.length ? <div className="booking-list">{bookings.map((booking) => <article className="booking-row customer-booking-row" key={booking.id}><div><span className="eyebrow">طلب #{booking.booking_number}</span><h3>{booking.services?.name_ar ?? 'خدمة منزلية'}</h3><p>{booking.city}{booking.district ? `، ${booking.district}` : ''} · {booking.scheduled_date ?? 'موعد يحدد لاحقًا'}</p>{booking.cancellation_reason && <p className="booking-cancellation-reason"><strong>سبب الإلغاء:</strong> {booking.cancellation_reason}</p>}<BookingAttachmentsPanel bookingId={booking.id} attachments={booking.attachments ?? booking.booking_attachments ?? []} canUpload={canUpload.has(booking.status)} onUploaded={refreshBookings} /><CustomerBookingActions booking={booking} onComplete={refreshBookings} /></div><div className="booking-row-side"><StatusPill tone={booking.status === 'completed' ? 'success' : booking.status === 'cancelled' ? 'warning' : 'neutral'}>{statusLabel[booking.status] ?? booking.status}</StatusPill><strong>{booking.price_snapshot ? `${booking.price_snapshot} ر.س` : 'بانتظار التسعير'}</strong></div><CustomerInvoice booking={booking} /></article>)}</div> : <EmptyState icon={FileText} title="لا توجد طلبات حتى الآن" body="أنشئ أول طلب، وستظهر حالته وتاريخه هنا." action={<Link className="button button-primary" to="/book">ابدأ بطلب خدمة</Link>} />}</div>}
