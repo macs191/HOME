@@ -1,7 +1,8 @@
-import { Bell, Download, Menu, Moon, Search, Sun, X } from 'lucide-react'
+import { Bell, Download, Moon, Search, Sun, UserRound, X } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { BrandMark } from './Brand'
+import { signOutAccount } from '../lib/supabase'
 
 type InstallChoice = { outcome: 'accepted' | 'dismissed'; platform: string }
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<InstallChoice> }
@@ -33,90 +34,57 @@ function InstallGuide({ onClose }: { onClose: () => void }) {
   </div>
 }
 
+function ProfileHub({ role, onClose, onSignOut, signingOut }: { role: 'customer' | 'provider' | null; onClose: () => void; onSignOut: () => void; signingOut: boolean }) {
+  if (!role) return <section className="profile-hub" role="dialog" aria-label="الحساب"><div className="profile-hub-head"><strong>الحساب</strong><button type="button" className="icon-button" onClick={onClose} aria-label="إغلاق"><X size={18} /></button></div><p className="muted">سجّل الدخول للوصول إلى الطلبات والإعدادات.</p><Link className="button button-primary button-wide" to="/customer/login" onClick={onClose}>تسجيل الدخول</Link></section>
+  const base = role === 'provider' ? '/provider' : '/customer'
+  return <section className="profile-hub" role="dialog" aria-label="ملف الحساب">
+    <div className="profile-hub-head"><div className="profile-hub-avatar"><UserRound size={20} /></div><div><strong>{role === 'provider' ? 'حساب الفني' : 'حساب العميل'}</strong><small>الوصول السريع</small></div><button type="button" className="icon-button" onClick={onClose} aria-label="إغلاق"><X size={18} /></button></div>
+    <nav className="profile-hub-links" aria-label="روابط الحساب"><Link to={`${base}/overview`} onClick={onClose}>الرئيسية</Link><Link to={role === 'provider' ? `${base}/work-queue` : `${base}/orders`} onClick={onClose}>الطلبات</Link><Link to={`${base}/notifications`} onClick={onClose}>الإشعارات</Link><Link to={`${base}/settings`} onClick={onClose}>إعدادات الحساب</Link></nav>
+    <button type="button" className="profile-hub-signout" onClick={onSignOut} disabled={signingOut}>{signingOut ? 'جارٍ تسجيل الخروج…' : 'تسجيل الخروج'}</button>
+  </section>
+}
+
 export function Shell({ children, theme, onThemeChange }: { children: ReactNode; theme: 'light' | 'dark'; onThemeChange: () => void }) {
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null)
   const [installGuideOpen, setInstallGuideOpen] = useState(false)
   const [appInstalled, setAppInstalled] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
   const location = useLocation()
+  const role = location.pathname.startsWith('/provider') ? 'provider' : location.pathname.startsWith('/customer') ? 'customer' : null
 
-  useEffect(() => setMobileOpen(false), [location.pathname])
-
+  useEffect(() => setProfileOpen(false), [location.pathname])
   useEffect(() => {
-    const capture = (event: Event) => {
-      event.preventDefault()
-      setInstallPrompt(event as InstallPromptEvent)
-    }
+    const capture = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallPromptEvent) }
     const installed = () => { setInstallPrompt(null); setAppInstalled(true) }
     const checkStandalone = () => setAppInstalled(isStandaloneApp())
-    window.addEventListener('beforeinstallprompt', capture)
-    window.addEventListener('appinstalled', installed)
-    checkStandalone()
-    const displayMode = window.matchMedia?.('(display-mode: standalone)')
-    displayMode?.addEventListener?.('change', checkStandalone)
-    return () => {
-      window.removeEventListener('beforeinstallprompt', capture)
-      window.removeEventListener('appinstalled', installed)
-      displayMode?.removeEventListener?.('change', checkStandalone)
-    }
+    window.addEventListener('beforeinstallprompt', capture); window.addEventListener('appinstalled', installed); checkStandalone()
+    const displayMode = window.matchMedia?.('(display-mode: standalone)'); displayMode?.addEventListener?.('change', checkStandalone)
+    return () => { window.removeEventListener('beforeinstallprompt', capture); window.removeEventListener('appinstalled', installed); displayMode?.removeEventListener?.('change', checkStandalone) }
   }, [])
-
   useEffect(() => {
-    if (!mobileOpen && !installGuideOpen) return
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { setMobileOpen(false); setInstallGuideOpen(false) }
-    }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [mobileOpen, installGuideOpen])
-
+    if (!profileOpen && !installGuideOpen) return
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') { setProfileOpen(false); setInstallGuideOpen(false) } }
+    window.addEventListener('keydown', closeOnEscape); return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [profileOpen, installGuideOpen])
   const installApp = async () => {
-    setMobileOpen(false)
+    setProfileOpen(false)
     if (appInstalled || isStandaloneApp()) { setAppInstalled(true); return }
     if (!installPrompt) { setInstallGuideOpen(true); return }
-    try {
-      await installPrompt.prompt()
-      const choice = await installPrompt.userChoice
-      setInstallPrompt(null)
-      if (choice.outcome === 'accepted') setAppInstalled(true)
-    } catch {
-      setInstallGuideOpen(true)
-    }
+    try { await installPrompt.prompt(); const choice = await installPrompt.userChoice; setInstallPrompt(null); if (choice.outcome === 'accepted') setAppInstalled(true) } catch { setInstallGuideOpen(true) }
   }
-
-  const nav = [
-    { to: '/', label: 'الرئيسية' },
-    { to: '/services', label: 'الخدمات' },
-    { to: '/book', label: 'اطلب خدمة' },
-    { to: '/customer/login', label: 'دخول العملاء' },
-    { to: '/provider/login', label: 'دخول الفنيين' },
-  ]
+  const handleSignOut = async () => { setSigningOut(true); try { await signOutAccount(); window.location.assign('/') } catch { setSigningOut(false) } }
+  const nav = [{ to: '/', label: 'الرئيسية' }, { to: '/services', label: 'الخدمات' }, { to: '/book', label: 'اطلب خدمة' }, { to: '/customer/login', label: 'دخول العملاء' }, { to: '/provider/login', label: 'دخول الفنيين' }]
 
   return <div className="app-shell">
-    <header className="topbar">
-      <div className="topbar-inner">
-        <button type="button" className="icon-button mobile-menu" onClick={() => setMobileOpen((value) => !value)} aria-label={mobileOpen ? 'إغلاق القائمة' : 'فتح القائمة'} aria-expanded={mobileOpen} aria-controls="main-site-navigation">
-          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
-        <Link to="/" className="brand-link" aria-label="هوم سيرفس — الرئيسية"><BrandMark /></Link>
-        <nav id="main-site-navigation" className={`main-nav ${mobileOpen ? 'is-open' : ''}`} aria-label="روابط الموقع">
-          {nav.map((item) => <NavLink key={item.to} to={item.to} onClick={() => setMobileOpen(false)} className={({ isActive }) => isActive ? 'active' : ''}>{item.label}</NavLink>)}
-          <button type="button" className="main-nav-install" onClick={() => void installApp()} disabled={appInstalled}>
-            <Download size={17} /><span>{appInstalled ? 'التطبيق مثبت' : 'تثبيت التطبيق'}</span>
-          </button>
-        </nav>
-        <div className="topbar-actions">
-          {installPrompt && !appInstalled && <button type="button" className="button button-small install-app-button" onClick={() => void installApp()}><Download size={15} /> تثبيت التطبيق</button>}
-          <Link className="icon-button hide-mobile" aria-label="بحث" to="/services"><Search size={18} /></Link>
-          <Link className="icon-button" aria-label="مركز الإشعارات" title="مركز الإشعارات" to={location.pathname.startsWith('/admin') ? '/admin/notifications' : location.pathname.startsWith('/provider') ? '/provider/notifications' : '/customer/notifications'}><Bell size={18} /></Link>
-          <button type="button" className="icon-button" onClick={onThemeChange} aria-label="تغيير المظهر">{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button>
-          <Link to="/customer/login" className="login-link hide-mobile">دخول العملاء</Link>
-          <Link to="/book" className="button button-small hide-mobile">ابدأ طلبك</Link>
-        </div>
-      </div>
-    </header>
+    <header className="topbar"><div className="topbar-inner">
+      <Link to="/" className="brand-link" aria-label="هوم سيرفس — الرئيسية"><BrandMark /></Link>
+      <nav id="main-site-navigation" className="main-nav" aria-label="روابط الموقع">{nav.map((item) => <NavLink key={item.to} to={item.to} className={({ isActive }) => isActive ? 'active' : ''}>{item.label}</NavLink>)}<button type="button" className="main-nav-install" onClick={() => void installApp()} disabled={appInstalled}><Download size={17} /><span>{appInstalled ? 'التطبيق مثبت' : 'تثبيت التطبيق'}</span></button></nav>
+      <div className="topbar-actions">{installPrompt && !appInstalled && <button type="button" className="button button-small install-app-button" onClick={() => void installApp()}><Download size={15} /> تثبيت التطبيق</button>}<Link className="icon-button hide-mobile" aria-label="بحث" to="/services"><Search size={18} /></Link><Link className="icon-button" aria-label="مركز الإشعارات" title="مركز الإشعارات" to={location.pathname.startsWith('/admin') ? '/admin/notifications' : role === 'provider' ? '/provider/notifications' : '/customer/notifications'}><Bell size={18} /></Link><button type="button" className="icon-button" onClick={onThemeChange} aria-label="تغيير المظهر">{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button><button type="button" className="icon-button profile-trigger" onClick={() => setProfileOpen((value) => !value)} aria-label="الحساب" aria-expanded={profileOpen}><UserRound size={19} /></button><Link to="/book" className="button button-small hide-mobile">ابدأ طلبك</Link></div>
+    </div></header>
+    {profileOpen && <div className="profile-hub-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setProfileOpen(false) }}><ProfileHub role={role} onClose={() => setProfileOpen(false)} onSignOut={() => void handleSignOut()} signingOut={signingOut} /></div>}
     <main>{children}</main>
-    <footer className="footer"><div className="container footer-grid"><div><BrandMark /><p className="muted footer-copy">منصة تربطك بفني مناسب، في الوقت المناسب. بوضوح أكبر وبدون وعود غير مؤكدة.</p></div><div><strong>روابط سريعة</strong><Link to="/services">استعرض الخدمات</Link><Link to="/book">أنشئ طلبًا</Link><Link to="/provider">انضم كمقدم خدمة</Link></div><div><strong>حسابات المنصة</strong><Link to="/customer/login">دخول العملاء</Link><Link to="/provider/login">دخول الفنيين</Link><Link to="/admin">لوحة الإدارة</Link></div><div><strong>الدعم</strong><p className="muted">تابع حالة الطلب والتنبيهات من مساحة العميل.</p><Link to="/customer/login">فتح مساحة العميل</Link></div></div><div className="container footer-bottom"><span>© 2026 هوم سيرفس</span><span>مصمم للخدمة الحقيقية، لا للأرقام الوهمية.</span></div></footer>
+    <footer className="footer"><div className="container footer-grid"><div><BrandMark /><p className="muted footer-copy">منصة تربطك بفني مناسب، في الوقت المناسب.</p></div><div><strong>روابط سريعة</strong><Link to="/services">استعرض الخدمات</Link><Link to="/book">أنشئ طلبًا</Link></div><div><strong>حسابات المنصة</strong><Link to="/customer/login">دخول العملاء</Link><Link to="/provider/login">دخول الفنيين</Link><Link to="/admin">لوحة الإدارة</Link></div><div><strong>الدعم</strong><Link to="/customer/login">فتح مساحة العميل</Link></div></div><div className="container footer-bottom"><span>© 2026 هوم سيرفس</span></div></footer>
     {installGuideOpen && <InstallGuide onClose={() => setInstallGuideOpen(false)} />}
   </div>
 }
