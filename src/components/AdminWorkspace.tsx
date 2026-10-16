@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Bell, Check, ChevronLeft, FileText, Gauge, Layers3, LogOut, MapPin, Navigation, Search, Send, Settings2, ShieldCheck, TicketPercent, TrendingUp, UsersRound, WalletCards, X } from 'lucide-react'
+import { ArrowLeft, Bell, Check, ChevronLeft, FileText, Gauge, Layers3, LogOut, MapPin, Navigation, Search, ShoppingBag, Send, Settings2, ShieldCheck, TicketPercent, TrendingUp, UsersRound, WalletCards, X } from 'lucide-react'
 import { AdminMarketplacePanel } from './AdminMarketplacePanel'
+import { AdminProductsPanel } from './AdminProductsPanel'
 import { AdminAccountsPanel } from './AdminAccountsPanel'
 import { AdminBookingActions } from './AdminBookingActions'
 import { AdminReportsPanel } from './AdminReportsPanel'
@@ -11,14 +12,14 @@ import { MobileBottomNav } from './MobileBottomNav'
 import { NotificationsPanel } from './NotificationsPanel'
 import { InlineDocumentViewer } from './InlineDocumentViewer'
 
-type Section = 'overview' | 'operations' | 'reports' | 'accounts' | 'applications' | 'catalog' | 'quotes' | 'payments' | 'settings' | 'notifications'
+type Section = 'overview' | 'operations' | 'reports' | 'accounts' | 'applications' | 'catalog' | 'products' | 'quotes' | 'payments' | 'settings' | 'notifications'
 const navItems: { id: Section; label: string; icon: typeof Gauge }[] = [
   { id: 'overview', label: 'نظرة عامة', icon: Gauge }, { id: 'operations', label: 'الطلبات والإسناد', icon: FileText },
-  { id: 'reports', label: 'التقارير', icon: TrendingUp }, { id: 'accounts', label: 'العملاء والفنيون', icon: UsersRound }, { id: 'applications', label: 'طلبات اعتماد الفنيين', icon: ShieldCheck }, { id: 'catalog', label: 'الأقسام والخدمات', icon: Layers3 },
+  { id: 'reports', label: 'التقارير', icon: TrendingUp }, { id: 'accounts', label: 'العملاء والفنيون', icon: UsersRound }, { id: 'applications', label: 'طلبات اعتماد الفنيين', icon: ShieldCheck }, { id: 'catalog', label: 'الأقسام والخدمات', icon: Layers3 }, { id: 'products', label: 'متجر المنتجات', icon: ShoppingBag },
   { id: 'quotes', label: 'عروض الأسعار', icon: TicketPercent }, { id: 'payments', label: 'الفواتير والتحصيل', icon: WalletCards },
   { id: 'settings', label: 'إعدادات المنصة', icon: Settings2 }, { id: 'notifications', label: 'الإشعارات', icon: Bell },
 ]
-const sectionTitle: Record<Section, string> = { overview: 'نظرة عامة', operations: 'الطلبات والإسناد', reports: 'التقارير', accounts: 'العملاء والفنيون', applications: 'طلبات اعتماد الفنيين', catalog: 'الأقسام والخدمات', quotes: 'عروض الأسعار', payments: 'الفواتير والتحصيل', settings: 'إعدادات المنصة', notifications: 'الإشعارات' }
+const sectionTitle: Record<Section, string> = { overview: 'نظرة عامة', operations: 'الطلبات والإسناد', reports: 'التقارير', accounts: 'العملاء والفنيون', applications: 'طلبات اعتماد الفنيين', catalog: 'الأقسام والخدمات', products: 'متجر المنتجات', quotes: 'عروض الأسعار', payments: 'الفواتير والتحصيل', settings: 'إعدادات المنصة', notifications: 'الإشعارات' }
 
 export function AdminWorkspace() {
   const { section: rawSection } = useParams()
@@ -92,6 +93,7 @@ export function AdminWorkspace() {
         {!loading && section === 'accounts' && <AdminAccountsPanel />}
         {section === 'notifications' && <NotificationsPanel />}
         {!loading && section === 'reports' && <AdminReportsPanel />}
+        {section === 'products' && <AdminProductsPanel />}
         {['catalog','quotes','payments','settings'].includes(section) && <AdminMarketplacePanel section={section as 'catalog'|'quotes'|'payments'|'settings'} />}
       </main>
     </div>

@@ -87,6 +87,61 @@ export async function getLiveCatalog(): Promise<{ categories: ServiceCategory[];
   return { categories: liveCategories, services: liveServices }
 }
 
+
+export type StoreCategory = { id: string; slug: string; name_ar: string; description: string | null; display_order: number; is_active: boolean }
+export type StoreProduct = { id: string; category_id: string; slug: string; name_ar: string; description: string; image_url: string | null; price: number; discount_percent: number; installation_available: boolean; is_active: boolean; is_featured: boolean; display_order: number; product_categories?: StoreCategory | StoreCategory[] }
+
+export async function getStoreCatalog(admin = false): Promise<{ categories: StoreCategory[]; products: StoreProduct[] }> {
+  if (!supabase) return { categories: [], products: [] }
+  const categoryQuery = supabase.from('product_categories').select('id,slug,name_ar,description,display_order,is_active').order('display_order')
+  const productQuery = supabase.from('products').select('id,category_id,slug,name_ar,description,image_url,price,discount_percent,installation_available,is_active,is_featured,display_order,product_categories(id,slug,name_ar,description,display_order,is_active)').order('display_order')
+  const [categories, products] = await Promise.all([categoryQuery, productQuery])
+  if (categories.error) throw categories.error
+  if (products.error) throw products.error
+  return { categories: (categories.data ?? []) as StoreCategory[], products: (products.data ?? []).map((row: any) => ({ ...row, price: Number(row.price), discount_percent: Number(row.discount_percent) })) as StoreProduct[] }
+}
+
+export async function saveStoreCategory(input: Partial<StoreCategory> & { name_ar: string; slug: string }) {
+  if (!supabase) throw new Error('المتجر غير متاح الآن.')
+  const { id, ...categoryFields } = input
+  const payload = { ...categoryFields, name_ar: input.name_ar.trim(), slug: input.slug.trim().toLowerCase() }
+  const result = id ? await supabase.from('product_categories').update(payload).eq('id', id) : await supabase.from('product_categories').insert(payload)
+  if (result.error) throw result.error
+}
+export async function saveStoreProduct(input: Partial<StoreProduct> & { category_id: string; name_ar: string; slug: string; price: number }) {
+  if (!supabase) throw new Error('المتجر غير متاح الآن.')
+  const { id, product_categories, ...productFields } = input
+  const payload = { ...productFields, name_ar: input.name_ar.trim(), slug: input.slug.trim().toLowerCase(), price: Number(input.price), discount_percent: Number(input.discount_percent ?? 0) }
+  const result = id ? await supabase.from('products').update(payload).eq('id', id) : await supabase.from('products').insert(payload)
+  if (result.error) throw result.error
+}
+export async function getMyProductOrders() {
+  if (!supabase) return { data: [], error: null }
+  return supabase.from('product_orders').select('id,order_number,status,installation_requested,installation_status,city,district,address_text,notes,subtotal,discount_amount,total_amount,provider_id,created_at,product_order_items(id,product_name_snapshot,unit_price,discount_percent_snapshot,quantity,line_total)').order('created_at', { ascending: false }).limit(100)
+}
+export async function createProductOrder(input: { items: { product_id: string; quantity: number }[]; installationRequested: boolean; city: string; district: string; address: string; notes: string }) {
+  if (!supabase) throw new Error('المتجر غير متاح الآن.')
+  const { data, error } = await supabase.rpc('create_product_order', { p_items: input.items, p_installation_requested: input.installationRequested, p_city: input.city, p_district: input.district, p_address_text: input.address, p_notes: input.notes })
+  if (error) throw new Error(error.message || 'تعذر إنشاء طلب المنتج.')
+  return data
+}
+export async function getAdminProductOrders() {
+  if (!supabase) return { data: [], error: null }
+  return supabase.from('product_orders').select('id,order_number,status,installation_requested,installation_status,city,district,address_text,notes,subtotal,discount_amount,total_amount,provider_id,created_at,profiles:customer_id(full_name,phone),product_order_items(product_name_snapshot,quantity,line_total)').order('created_at', { ascending: false }).limit(200)
+}
+export async function updateProviderProductOrderStatus(orderId: string, status: string) {
+  if (!supabase) throw new Error('المتجر غير متاح الآن.')
+  const { data, error } = await supabase.rpc('provider_update_product_order_status', { p_order_id: orderId, p_status: status })
+  if (error) throw error
+  return data
+}
+export async function adminAssignProductOrder(orderId: string, providerId: string) {
+  if (!supabase) throw new Error('المتجر غير متاح الآن.')
+  const { data, error } = await supabase.rpc('admin_assign_product_order', { p_order_id: orderId, p_provider_id: providerId })
+  if (error) throw error
+  return data
+}
+
 export type AuthState = { session: Session | null; user: User | null }
 export type AppNotification = { id: string; title: string; body: string; notification_type: string; target_path: string | null; is_read: boolean; created_at: string }
 
