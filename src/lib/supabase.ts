@@ -865,3 +865,45 @@ export async function saveCustomerAddress(input: { label: string; city: string; 
   if (error) throw new Error(error.message || 'تعذر حفظ العنوان.')
   return data
 }
+
+export type ProviderWeeklyAvailability = { weekday: number; start_time: string; end_time: string; is_enabled: boolean }
+export type ProviderTimeOff = { id: string; starts_on: string; ends_on: string; reason: string | null }
+
+export async function getProviderSchedule() {
+  if (!supabase) return { weekly: [], timeOff: [], error: null }
+  const userId = (await supabase.auth.getUser()).data.user?.id
+  if (!userId) return { weekly: [], timeOff: [], error: new Error('تسجيل الدخول مطلوب.') }
+  const [weekly, timeOff] = await Promise.all([
+    supabase.from('provider_weekly_availability').select('weekday,start_time,end_time,is_enabled').eq('provider_id', userId).order('weekday'),
+    supabase.from('provider_time_off').select('id,starts_on,ends_on,reason').eq('provider_id', userId).order('starts_on').limit(100),
+  ])
+  return { weekly: weekly.data ?? [], timeOff: timeOff.data ?? [], error: weekly.error ?? timeOff.error }
+}
+
+export async function saveProviderSchedule(rows: ProviderWeeklyAvailability[]) {
+  if (!supabase) throw new Error('خدمة الجدول غير متاحة الآن.')
+  const userId = (await supabase.auth.getUser()).data.user?.id
+  if (!userId) throw new Error('سجّل الدخول لإدارة جدولك.')
+  const { error: deleteError } = await supabase.from('provider_weekly_availability').delete().eq('provider_id', userId)
+  if (deleteError) throw new Error(deleteError.message || 'تعذر تحديث الجدول.')
+  const enabled = rows.filter((row) => row.is_enabled)
+  if (!enabled.length) return
+  const { error } = await supabase.from('provider_weekly_availability').insert(enabled.map((row) => ({ provider_id: userId, weekday: row.weekday, start_time: row.start_time, end_time: row.end_time, is_enabled: true })))
+  if (error) throw new Error(error.message || 'تعذر حفظ الجدول.')
+}
+
+export async function addProviderTimeOff(input: { startsOn: string; endsOn: string; reason: string }) {
+  if (!supabase) throw new Error('خدمة الإجازات غير متاحة الآن.')
+  const userId = (await supabase.auth.getUser()).data.user?.id
+  if (!userId) throw new Error('سجّل الدخول لإدارة إجازاتك.')
+  if (!input.startsOn || !input.endsOn || input.endsOn < input.startsOn) throw new Error('اختر فترة إجازة صحيحة.')
+  const { data, error } = await supabase.from('provider_time_off').insert({ provider_id: userId, starts_on: input.startsOn, ends_on: input.endsOn, reason: input.reason.trim() || null }).select('id,starts_on,ends_on,reason').single()
+  if (error) throw new Error(error.message || 'تعذر إضافة الإجازة.')
+  return data
+}
+
+export async function removeProviderTimeOff(id: string) {
+  if (!supabase) throw new Error('خدمة الإجازات غير متاحة الآن.')
+  const { error } = await supabase.from('provider_time_off').delete().eq('id', id)
+  if (error) throw new Error(error.message || 'تعذر حذف الإجازة.')
+}
