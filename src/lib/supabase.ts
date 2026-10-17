@@ -819,3 +819,25 @@ export async function getAdminOperationalReport(from?: string, to?: string) {
   if (error) throw actionError(error, 'تعذر تحميل التقرير التشغيلي. تحقق من الفترة المحددة وحاول مجددًا.')
   return data
 }
+
+export async function getBookingMessages(bookingId: string) {
+  if (!supabase) return { data: [], error: new Error('خدمة المحادثة غير متاحة الآن.') }
+  return supabase.from('booking_messages').select('id,booking_id,sender_id,body,attachment_path,read_at,created_at').eq('booking_id', bookingId).order('created_at', { ascending: true }).limit(100)
+}
+
+export async function sendBookingMessage(bookingId: string, body: string) {
+  if (!supabase) throw new Error('خدمة المحادثة غير متاحة الآن.')
+  const text = body.trim()
+  if (!bookingId || text.length < 1 || text.length > 4000) throw new Error('اكتب رسالة بين حرف واحد و4000 حرف.')
+  const userId = (await supabase.auth.getUser()).data.user?.id
+  if (!userId) throw new Error('سجّل الدخول لإرسال رسالة.')
+  const { data, error } = await supabase.from('booking_messages').insert({ booking_id: bookingId, sender_id: userId, body: text }).select('id,booking_id,sender_id,body,attachment_path,read_at,created_at').single()
+  if (error) throw new Error(error.message || 'تعذر إرسال الرسالة.')
+  return data
+}
+
+export async function subscribeToBookingMessages(bookingId: string, onChange: () => void) {
+  if (!supabase || !bookingId) return () => undefined
+  const channel = supabase.channel(`booking-messages:${bookingId}:${crypto.randomUUID()}`).on('postgres_changes', { event: '*', schema: 'public', table: 'booking_messages', filter: `booking_id=eq.${bookingId}` }, () => onChange()).subscribe()
+  return () => { void supabase?.removeChannel(channel) }
+}
