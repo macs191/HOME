@@ -850,3 +850,18 @@ export async function submitBookingReview(input: { bookingId: string; quality: n
   if (error) throw new Error(/duplicate|unique/i.test(error.message) ? 'تم إرسال تقييم هذا الطلب من قبل.' : error.message || 'تعذر إرسال التقييم.')
   return data
 }
+
+export async function getCustomerAddresses() {
+  if (!supabase) return { data: [], error: new Error('خدمة العناوين غير متاحة الآن.') }
+  return supabase.from('customer_addresses').select('id,label,city,district,address_text,access_notes,latitude,longitude,is_default,created_at').order('is_default', { ascending: false }).order('created_at', { ascending: false }).limit(20)
+}
+
+export async function saveCustomerAddress(input: { label: string; city: string; district: string; address: string; accessNotes: string; latitude?: number; longitude?: number }) {
+  if (!supabase) throw new Error('خدمة العناوين غير متاحة الآن.')
+  if (input.label.trim().length < 1 || input.city.trim().length < 2 || input.address.trim().length < 3) throw new Error('أدخل اسم العنوان والمدينة والعنوان التفصيلي.')
+  const userId = (await supabase.auth.getUser()).data.user?.id
+  if (!userId) throw new Error('سجّل الدخول لحفظ العنوان.')
+  const { data, error } = await supabase.from('customer_addresses').insert({ customer_id: userId, label: input.label.trim(), city: input.city.trim(), district: input.district.trim() || null, address_text: input.address.trim(), access_notes: input.accessNotes.trim() || null, latitude: input.latitude ?? null, longitude: input.longitude ?? null }).select('id,label,city,district,address_text,access_notes,latitude,longitude,is_default,created_at').single()
+  if (error) throw new Error(error.message || 'تعذر حفظ العنوان.')
+  return data
+}
