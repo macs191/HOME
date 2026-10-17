@@ -303,7 +303,7 @@ export async function createBookingFromDraft(draft: BookingDraft, serviceSlug: s
 
 export async function getMyBookings() {
   if (!supabase) return { data: [], error: null }
-  return supabase.from('bookings').select('id, booking_number, status, payment_status, cancellation_reason, city, district, address_text, latitude, longitude, issue_description, scheduled_date, scheduled_slot, price_snapshot, created_at, services(name_ar, slug), payments(id,invoice_number,amount,status,payment_method,receipt_reference,review_note), booking_status_history(id,from_status,to_status,note,created_at), reviews(id,quality,punctuality,conduct,value,comment,created_at), booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').order('created_at', { ascending: false }).limit(50)
+  return supabase.from('bookings').select('id, booking_number, status, payment_status, cancellation_reason, city, district, address_text, latitude, longitude, issue_description, scheduled_date, scheduled_slot, price_snapshot, tracking_consent_at, tracking_revoked_at, created_at, services(name_ar, slug), payments(id,invoice_number,amount,status,payment_method,receipt_reference,review_note), booking_status_history(id,from_status,to_status,note,created_at), reviews(id,quality,punctuality,conduct,value,comment,created_at), booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').order('created_at', { ascending: false }).limit(50)
 }
 
 
@@ -336,7 +336,7 @@ export async function getMyProviderProfile() {
 
 export async function getProviderWorkQueue() {
   if (!supabase) return { data: [], error: null }
-  return supabase.from('bookings').select('id,booking_number,status,payment_status,cancellation_reason,city,district,address_text,access_notes,latitude,longitude,issue_description,scheduled_date,scheduled_slot,price_snapshot,provider_amount_snapshot,created_at,services(name_ar,pricing_type,base_price),profiles!bookings_customer_id_fkey(full_name,phone),booking_quotes(id,amount,note,status,admin_review_note,created_at),booking_status_history(id,from_status,to_status,note,created_at),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').eq('provider_id', (await supabase.auth.getUser()).data.user?.id ?? '').order('created_at', { ascending: false }).limit(50)
+  return supabase.from('bookings').select('id,booking_number,status,payment_status,cancellation_reason,city,district,address_text,access_notes,latitude,longitude,issue_description,scheduled_date,scheduled_slot,price_snapshot,provider_amount_snapshot,tracking_consent_at,tracking_revoked_at,created_at,services(name_ar,pricing_type,base_price),profiles!bookings_customer_id_fkey(full_name,phone),booking_quotes(id,amount,note,status,admin_review_note,created_at),booking_status_history(id,from_status,to_status,note,created_at),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').eq('provider_id', (await supabase.auth.getUser()).data.user?.id ?? '').order('created_at', { ascending: false }).limit(50)
 }
 
 export async function getProviderLedger() {
@@ -906,4 +906,30 @@ export async function removeProviderTimeOff(id: string) {
   if (!supabase) throw new Error('خدمة الإجازات غير متاحة الآن.')
   const { error } = await supabase.from('provider_time_off').delete().eq('id', id)
   if (error) throw new Error(error.message || 'تعذر حذف الإجازة.')
+}
+
+export async function setBookingTrackingConsent(bookingId: string, consent: boolean) {
+  if (!supabase) throw new Error('تتبع الطلب غير متاح الآن.')
+  const { data, error } = await supabase.rpc('customer_set_tracking_consent', { p_booking_id: bookingId, p_consent: consent })
+  if (error) throw new Error(error.message.includes('tracking_consent_not_allowed') ? 'لا يمكن تفعيل التتبع إلا بعد إسناد الفني وأثناء المهمة.' : error.message || 'تعذر تحديث موافقة التتبع.')
+  return data
+}
+export async function getBookingTrackingState(bookingId: string) {
+  if (!supabase) return { booking: null, location: null, error: null }
+  const [booking, location] = await Promise.all([
+    supabase.from('bookings').select('id,status,provider_id,tracking_consent_at,tracking_revoked_at').eq('id', bookingId).maybeSingle(),
+    supabase.from('booking_tracking_locations').select('booking_id,provider_id,latitude,longitude,accuracy_meters,captured_at,expires_at').eq('booking_id', bookingId).maybeSingle(),
+  ])
+  return { booking: booking.data, location: location.data, error: booking.error ?? location.error }
+}
+export async function providerUpdateBookingLocation(bookingId: string, latitude: number, longitude: number, accuracy?: number) {
+  if (!supabase) throw new Error('تتبع الطلب غير متاح الآن.')
+  const { data, error } = await supabase.rpc('provider_update_booking_location', { p_booking_id: bookingId, p_latitude: latitude, p_longitude: longitude, p_accuracy_meters: accuracy ?? null })
+  if (error) throw new Error(error.message || 'تعذر تحديث موقع المهمة.')
+  return data
+}
+export async function subscribeToBookingTracking(bookingId: string, onChange: () => void) {
+  if (!supabase) return () => undefined
+  const channel = supabase.channel(`booking-tracking:${bookingId}:${crypto.randomUUID()}`).on('postgres_changes', { event: '*', schema: 'public', table: 'booking_tracking_locations', filter: `booking_id=eq.${bookingId}` }, () => onChange()).subscribe()
+  return () => { void supabase?.removeChannel(channel) }
 }
