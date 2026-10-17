@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Check, ExternalLink, MapPin, Phone, Send } from 'lucide-react'
 import { advanceProviderBooking, finishFixedPriceBooking, submitProviderQuote } from '../lib/supabase'
 import { BookingAttachmentsPanel } from './BookingAttachmentsPanel'
+import { BookingStatusTimeline } from './BookingStatusTimeline'
 
 type Props = { item: any; onUpdate: () => Promise<void>; onMessage: (value: string) => void }
 const statusLabel: Record<string, string> = { pending: 'جديد', quoted: 'عرض سعر', accepted: 'مقبول', assigned: 'تم الإسناد', on_the_way: 'الفني في الطريق', arrived: 'وصل الفني', in_progress: 'قيد التنفيذ', completed: 'مكتمل', cancelled: 'ملغي', disputed: 'قيد المراجعة' }
@@ -27,7 +28,7 @@ export function ProviderJobCard({ item, onUpdate, onMessage }: Props) {
   return <article className="provider-job-card">
     <div className="provider-job-head"><div><span className="eyebrow">طلب #{item.booking_number} · {service?.name_ar ?? 'خدمة منزلية'}</span><h3>{customer?.full_name || 'العميل'}</h3><p>{item.scheduled_date ? `${item.scheduled_date} · ${item.scheduled_slot ?? ''}` : 'موعد مرن حسب الاتفاق'}</p></div><span className="status-pill">{statusLabel[item.status] ?? item.status}</span></div>
     <div className="provider-job-details"><p><strong>الموقع:</strong> {[item.address_text, item.district, item.city].filter(Boolean).join(' · ') || 'لم يحدد العنوان'}</p>{item.access_notes && <p><strong>ملاحظات الوصول:</strong> {item.access_notes}</p>}<p><strong>وصف الطلب:</strong> {item.issue_description || 'لا يوجد وصف إضافي'}</p></div>
-    <BookingAttachmentsPanel bookingId={item.id} attachments={item.attachments ?? item.booking_attachments ?? []} canUpload={false} />
+    <BookingAttachmentsPanel bookingId={item.id} attachments={item.attachments ?? item.booking_attachments ?? []} canUpload={false} /><BookingStatusTimeline events={item.booking_status_history} />
     <div className="provider-job-links"><a href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={15} /> فتح موقع العميل <ExternalLink size={13} /></a>{customer?.phone && <a href={`tel:${customer.phone}`}><Phone size={15} /> {customer.phone}</a>}</div>
     {item.status in nextAction && <button className="button button-primary button-small" disabled={busy} onClick={() => void execute(() => advanceProviderBooking(item.id), `تم تحديث حالة الطلب إلى: ${statusLabel[item.status === 'assigned' ? 'on_the_way' : item.status === 'on_the_way' ? 'arrived' : 'in_progress']}.`)}>{nextAction[item.status]} <Check size={15} /></button>}
     {item.status === 'in_progress' && (isFixed ? <div className="fixed-finish"><p>سعر ثابت معتمد: <strong>{Number(service?.base_price ?? item.price_snapshot ?? 0).toFixed(2)} ر.س</strong></p><button type="button" className="button button-primary button-small" disabled={busy} onClick={() => void execute(() => finishFixedPriceBooking(item.id), 'تم إنهاء المهمة وإصدار الفاتورة للعميل.')}>إنهاء المهمة وإصدار الفاتورة <Check size={15} /></button></div> : <QuoteForm amount={amount} note={note} busy={busy} setAmount={setAmount} setNote={setNote} onSubmit={() => void execute(() => submitProviderQuote(item.id, Number(amount), note), 'أُرسل السعر إلى الإدارة للمراجعة قبل إصدار الفاتورة.')} />)}

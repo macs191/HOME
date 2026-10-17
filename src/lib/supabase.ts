@@ -303,7 +303,7 @@ export async function createBookingFromDraft(draft: BookingDraft, serviceSlug: s
 
 export async function getMyBookings() {
   if (!supabase) return { data: [], error: null }
-  return supabase.from('bookings').select('id, booking_number, status, payment_status, cancellation_reason, city, district, address_text, latitude, longitude, issue_description, scheduled_date, scheduled_slot, price_snapshot, created_at, services(name_ar, slug), payments(id,invoice_number,amount,status,payment_method,receipt_reference,review_note), booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').order('created_at', { ascending: false }).limit(50)
+  return supabase.from('bookings').select('id, booking_number, status, payment_status, cancellation_reason, city, district, address_text, latitude, longitude, issue_description, scheduled_date, scheduled_slot, price_snapshot, created_at, services(name_ar, slug), payments(id,invoice_number,amount,status,payment_method,receipt_reference,review_note), booking_status_history(id,from_status,to_status,note,created_at), booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').order('created_at', { ascending: false }).limit(50)
 }
 
 
@@ -336,7 +336,7 @@ export async function getMyProviderProfile() {
 
 export async function getProviderWorkQueue() {
   if (!supabase) return { data: [], error: null }
-  return supabase.from('bookings').select('id,booking_number,status,payment_status,cancellation_reason,city,district,address_text,access_notes,latitude,longitude,issue_description,scheduled_date,scheduled_slot,price_snapshot,provider_amount_snapshot,created_at,services(name_ar,pricing_type,base_price),profiles!bookings_customer_id_fkey(full_name,phone),booking_quotes(id,amount,note,status,admin_review_note,created_at),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').eq('provider_id', (await supabase.auth.getUser()).data.user?.id ?? '').order('created_at', { ascending: false }).limit(50)
+  return supabase.from('bookings').select('id,booking_number,status,payment_status,cancellation_reason,city,district,address_text,access_notes,latitude,longitude,issue_description,scheduled_date,scheduled_slot,price_snapshot,provider_amount_snapshot,created_at,services(name_ar,pricing_type,base_price),profiles!bookings_customer_id_fkey(full_name,phone),booking_quotes(id,amount,note,status,admin_review_note,created_at),booking_status_history(id,from_status,to_status,note,created_at),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').eq('provider_id', (await supabase.auth.getUser()).data.user?.id ?? '').order('created_at', { ascending: false }).limit(50)
 }
 
 export async function getProviderLedger() {
@@ -530,7 +530,7 @@ export async function getAdminDocumentUrl(documentType: string, path: string, do
 export async function getAdminOperations() {
   if (!supabase) return { recent: [], assignable: [], providers: [] }
   const [recentResult, assignableResult, providerResult] = await Promise.all([
-    supabase.from('bookings').select('id,booking_number,service_id,status,payment_status,cancellation_reason,provider_id,city,district,address_text,latitude,longitude,issue_description,created_at,services(name_ar),profiles!bookings_customer_id_fkey(full_name,phone),provider_profiles(profiles(full_name)),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').order('created_at', { ascending: false }).limit(20),
+    supabase.from('bookings').select('id,booking_number,service_id,status,payment_status,cancellation_reason,provider_id,city,district,address_text,latitude,longitude,issue_description,created_at,services(name_ar),profiles!bookings_customer_id_fkey(full_name,phone),provider_profiles(profiles(full_name)),booking_status_history(id,from_status,to_status,note,created_at),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').order('created_at', { ascending: false }).limit(20),
     supabase.from('bookings').select('id,booking_number,service_id,status,payment_status,cancellation_reason,provider_id,city,district,address_text,latitude,longitude,issue_description,created_at,services(name_ar),profiles!bookings_customer_id_fkey(full_name,phone),provider_profiles(profiles(full_name)),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').is('provider_id', null).in('status', ['pending', 'quoted', 'accepted']).order('created_at', { ascending: true }).limit(100),
     supabase.from('provider_profiles').select('user_id,base_latitude,base_longitude,service_radius_km,profiles(full_name,is_active),provider_services(service_id,is_active,services(id,name_ar,category_id))').eq('approval_status', 'approved').order('created_at', { ascending: true }).limit(100),
   ])
