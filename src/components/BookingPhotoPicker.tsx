@@ -8,7 +8,7 @@ type Props = {
   title?: string
   description?: string
 }
-const ACCEPTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'])
+const ACCEPTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif'])
 const extensionType = (name: string) => {
   const extension = name.split('.').pop()?.toLowerCase()
   return extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : extension === 'png' ? 'image/png' : extension === 'webp' ? 'image/webp' : extension === 'heic' ? 'image/heic' : extension === 'heif' ? 'image/heif' : ''
@@ -27,13 +27,13 @@ export function BookingPhotoPicker({ files, onChange, maxFiles = 3, title = 'ص�
   const addFiles = (selection: FileList | null) => {
     if (!selection?.length) return
     const incoming = Array.from(selection)
-    const accepted = incoming.filter((file) => ACCEPTED_IMAGE_TYPES.has(file.type || extensionType(file.name)) && file.size > 0 && file.size <= 15 * 1024 * 1024)
+    const accepted = incoming.filter((file) => (ACCEPTED_IMAGE_TYPES.has(file.type.toLowerCase()) || ACCEPTED_IMAGE_TYPES.has(extensionType(file.name))) && file.size > 0 && file.size <= 15 * 1024 * 1024)
     const rejected = incoming.length - accepted.length
     const unique = accepted.filter((file) => !files.some((current) => current.name === file.name && current.size === file.size && current.lastModified === file.lastModified))
     const next = [...files, ...unique].slice(0, maxFiles)
     onChange(next)
     const overLimit = files.length + unique.length > maxFiles
-    setError(rejected ? 'تم تجاهل ملف غير صوري أو يتجاوز 15 ميجابايت.' : overLimit ? `الحد الأقصى ${maxFiles} صور لكل طلب.` : '')
+    setError(rejected ? 'تم تجاهل ملف غير صوري أو يتجاوز 15 ميجابايت. صيغة HEIC قد تحتاج تحويلها إلى JPG.' : overLimit ? `الحد الأقصى ${maxFiles} صور لكل طلب.` : '')
   }
   return <section className="booking-photo-picker" aria-label={title}>
     <div className="booking-photo-picker-head"><div><strong>{title}</strong><p>{description}</p></div><span>{files.length}/{maxFiles}</span></div>

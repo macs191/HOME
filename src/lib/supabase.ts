@@ -734,30 +734,33 @@ export async function uploadBookingPhotos(bookingId: string, files: File[]) {
   if (!userId) throw new Error('سجّل الدخول لرفع صور العطل.')
   let uploaded = 0
   const failures: string[] = []
+  const failureReasons: string[] = []
   for (const file of files) {
     let path = ''
     try {
       const blob = await prepareBookingPhoto(file)
       const hash = await sha256Hex(blob)
       path = `${userId}/${bookingId}/${hash}.jpg`
-      let result = await supabase.storage.from('booking-attachments').upload(path, blob, { contentType: 'image/jpeg', upsert: false })
+      const result = await supabase.storage.from('booking-attachments').upload(path, blob, { contentType: 'image/jpeg', cacheControl: '3600', upsert: false })
       if (result.error && !/already exists|duplicate|conflict/i.test(result.error.message)) throw result.error
       const registered = await supabase.rpc('register_booking_attachment_safe', { p_booking_id: bookingId, p_storage_path: path, p_file_size_bytes: blob.size })
       if (registered.error) throw registered.error
       uploaded += 1
     } catch (error) {
       failures.push(file.name || 'صورة')
+      const raw = error instanceof Error ? error.message.toLowerCase() : ''
+      const reason = raw.includes('heic') ? 'صيغة HEIC غير مدعومة؛ اختر JPG.' : raw.includes('metadata') ? 'رفض الخادم بيانات الصورة بعد الضغط.' : raw.includes('not_attachable') ? 'الطلب لم يعد يقبل مرفقات.' : raw.includes('limit') ? 'اكتمل حد 3 صور.' : raw.includes('row-level') || raw.includes('permission') ? 'لا تملك صلاحية رفعها لهذا الطلب.' : raw || 'خطأ غير معروف.'
+      failureReasons.push(`${file.name || 'الصورة'}: ${reason}`)
       if (path) {
         try {
           const check = await supabase.from('booking_attachments').select('id').eq('storage_path', path).maybeSingle()
           if (!check.error && !check.data) await supabase.storage.from('booking-attachments').remove([path])
-        } catch { /* orphan cleanup is best effort */ }
+        } catch { /* تنظيف الملف اليتيم محاولة إضافية فقط */ }
       }
     }
   }
-  return { uploaded, failures }
+  return { uploaded, failures, failureReasons }
 }
-
 export async function getBookingAttachmentUrl(path: string) {
   if (!supabase) throw new Error('خدمة الصور غير متاحة الآن.')
   const { data, error } = await supabase.storage.from('booking-attachments').createSignedUrl(path, 300)
