@@ -89,12 +89,12 @@ export async function getLiveCatalog(): Promise<{ categories: ServiceCategory[];
 
 
 export type StoreCategory = { id: string; slug: string; name_ar: string; description: string | null; display_order: number; is_active: boolean }
-export type StoreProduct = { id: string; category_id: string; slug: string; name_ar: string; description: string; image_url: string | null; price: number; discount_percent: number; installation_available: boolean; is_active: boolean; is_featured: boolean; display_order: number; product_categories?: StoreCategory | StoreCategory[] }
+export type StoreProduct = { id: string; category_id: string; slug: string; name_ar: string; description: string; image_url: string | null; price: number; discount_percent: number; installation_available: boolean; is_active: boolean; is_featured: boolean; display_order: number; stock_quantity: number; reserved_quantity: number; low_stock_threshold: number; product_categories?: StoreCategory | StoreCategory[] }
 
 export async function getStoreCatalog(admin = false): Promise<{ categories: StoreCategory[]; products: StoreProduct[] }> {
   if (!supabase) return { categories: [], products: [] }
   const categoryQuery = supabase.from('product_categories').select('id,slug,name_ar,description,display_order,is_active').order('display_order')
-  const productQuery = supabase.from('products').select('id,category_id,slug,name_ar,description,image_url,price,discount_percent,installation_available,is_active,is_featured,display_order,product_categories(id,slug,name_ar,description,display_order,is_active)').order('display_order')
+  const productQuery = supabase.from('products').select('id,category_id,slug,name_ar,description,image_url,price,discount_percent,installation_available,is_active,is_featured,display_order,stock_quantity,reserved_quantity,low_stock_threshold,product_categories(id,slug,name_ar,description,display_order,is_active)').order('display_order')
   const [categories, products] = await Promise.all([categoryQuery, productQuery])
   if (categories.error) throw categories.error
   if (products.error) throw products.error
@@ -110,8 +110,8 @@ export async function saveStoreCategory(input: Partial<StoreCategory> & { name_a
 }
 export async function saveStoreProduct(input: Partial<StoreProduct> & { category_id: string; name_ar: string; slug: string; price: number }) {
   if (!supabase) throw new Error('المتجر غير متاح الآن.')
-  const { id, product_categories, ...productFields } = input
-  const payload = { ...productFields, name_ar: input.name_ar.trim(), slug: input.slug.trim().toLowerCase(), price: Number(input.price), discount_percent: Number(input.discount_percent ?? 0) }
+  const { id, product_categories, reserved_quantity, ...productFields } = input
+  const payload = { ...productFields, name_ar: input.name_ar.trim(), slug: input.slug.trim().toLowerCase(), price: Number(input.price), discount_percent: Number(input.discount_percent ?? 0), stock_quantity: Math.max(0, Math.floor(Number(input.stock_quantity ?? 0))), low_stock_threshold: Math.max(0, Math.floor(Number(input.low_stock_threshold ?? 5))) }
   const result = id ? await supabase.from('products').update(payload).eq('id', id) : await supabase.from('products').insert(payload)
   if (result.error) throw result.error
 }
@@ -122,7 +122,7 @@ export async function getMyProductOrders() {
 export async function createProductOrder(input: { items: { product_id: string; quantity: number }[]; installationRequested: boolean; city: string; district: string; address: string; notes: string }) {
   if (!supabase) throw new Error('المتجر غير متاح الآن.')
   const { data, error } = await supabase.rpc('create_product_order', { p_items: input.items, p_installation_requested: input.installationRequested, p_city: input.city, p_district: input.district, p_address_text: input.address, p_notes: input.notes })
-  if (error) throw new Error(error.message || 'تعذر إنشاء طلب المنتج.')
+  if (error) { if (error.message.includes('insufficient_stock')) throw new Error('الكمية المطلوبة غير متوفرة حاليًا. حدّث السلة وحاول بكمية أقل.'); if (error.message.includes('product_not_available')) throw new Error('أحد المنتجات لم يعد متاحًا. حدّث المتجر وحاول مرة أخرى.'); throw new Error(error.message || 'تعذر إنشاء طلب المنتج.') }
   return data
 }
 export async function getAdminProductOrders() {
@@ -264,7 +264,7 @@ export async function signOutAccount() {
 export async function createAdminManualProductOrder(input: { customerId: string; productIds: string[]; providerId?: string; installationRequested: boolean; city: string; district: string; address: string; notes: string }) {
   if (!supabase) throw new Error('خدمة المتجر غير متاحة الآن.')
   const { data, error } = await supabase.rpc('admin_create_manual_product_order', { p_customer_id: input.customerId, p_product_ids: input.productIds, p_provider_id: input.providerId || null, p_installation_requested: input.installationRequested, p_city: input.city, p_district: input.district, p_address_text: input.address, p_notes: input.notes })
-  if (error) throw new Error(error.message || 'تعذر إنشاء طلب المنتج.')
+  if (error) { if (error.message.includes('insufficient_stock')) throw new Error('الكمية المطلوبة غير متوفرة حاليًا. حدّث السلة وحاول بكمية أقل.'); if (error.message.includes('product_not_available')) throw new Error('أحد المنتجات لم يعد متاحًا. حدّث المتجر وحاول مرة أخرى.'); throw new Error(error.message || 'تعذر إنشاء طلب المنتج.') }
   return data
 }
 
