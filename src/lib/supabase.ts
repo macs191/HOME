@@ -303,7 +303,7 @@ export async function createBookingFromDraft(draft: BookingDraft, serviceSlug: s
 
 export async function getMyBookings() {
   if (!supabase) return { data: [], error: null }
-  return supabase.from('bookings').select('id, booking_number, status, payment_status, cancellation_reason, city, district, address_text, latitude, longitude, issue_description, scheduled_date, scheduled_slot, price_snapshot, created_at, services(name_ar, slug), payments(id,invoice_number,amount,status,payment_method,receipt_reference,review_note), booking_status_history(id,from_status,to_status,note,created_at), booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').order('created_at', { ascending: false }).limit(50)
+  return supabase.from('bookings').select('id, booking_number, status, payment_status, cancellation_reason, city, district, address_text, latitude, longitude, issue_description, scheduled_date, scheduled_slot, price_snapshot, created_at, services(name_ar, slug), payments(id,invoice_number,amount,status,payment_method,receipt_reference,review_note), booking_status_history(id,from_status,to_status,note,created_at), reviews(id,quality,punctuality,conduct,value,comment,created_at), booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').order('created_at', { ascending: false }).limit(50)
 }
 
 
@@ -840,4 +840,13 @@ export async function subscribeToBookingMessages(bookingId: string, onChange: ()
   if (!supabase || !bookingId) return () => undefined
   const channel = supabase.channel(`booking-messages:${bookingId}:${crypto.randomUUID()}`).on('postgres_changes', { event: '*', schema: 'public', table: 'booking_messages', filter: `booking_id=eq.${bookingId}` }, () => onChange()).subscribe()
   return () => { void supabase?.removeChannel(channel) }
+}
+
+export async function submitBookingReview(input: { bookingId: string; quality: number; punctuality: number; conduct: number; value: number; comment: string }) {
+  if (!supabase) throw new Error('خدمة التقييم غير متاحة الآن.')
+  const ratings = [input.quality, input.punctuality, input.conduct, input.value]
+  if (!input.bookingId || ratings.some((value) => !Number.isInteger(value) || value < 1 || value > 5)) throw new Error('اختر تقييمًا صحيحًا من 1 إلى 5.')
+  const { data, error } = await supabase.from('reviews').insert({ booking_id: input.bookingId, quality: input.quality, punctuality: input.punctuality, conduct: input.conduct, value: input.value, comment: input.comment.trim() || null }).select('id,quality,punctuality,conduct,value,comment,created_at').single()
+  if (error) throw new Error(/duplicate|unique/i.test(error.message) ? 'تم إرسال تقييم هذا الطلب من قبل.' : error.message || 'تعذر إرسال التقييم.')
+  return data
 }
