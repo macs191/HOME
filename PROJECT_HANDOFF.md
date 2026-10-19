@@ -29,6 +29,7 @@ HOME SERVICE هو سوق خدمات منزلية يعمل باللغة العر�
 - `src/App.tsx`: المسارات الرئيسية ولوحات العميل والفني وتدفق إنشاء الطلب.
 - `src/lib/supabase.ts`: عميل Supabase ودوال القراءة وRPCs والاشتراكات اللحظية.
 - `src/components/AdminWorkspace.tsx`: لوحة الإدارة والإسناد والعمليات.
+- `src/components/AdminAuditPanel.tsx`: البحث والتصفية في جزء من سجل التدقيق الإداري.
 - `src/components/BookingAttachmentsPanel.tsx`: عرض صور الطلب ورفعها وإعادة المحاولة عند الفشل.
 - `src/components/BookingChat.tsx`: محادثة الطلب اللحظية.
 - `src/components/BookingStatusTimeline.tsx`: سجل انتقالات حالة الطلب.
@@ -37,7 +38,7 @@ HOME SERVICE هو سوق خدمات منزلية يعمل باللغة العر�
 - `src/components/StorePage.tsx`: المتجر وسلة العميل وطلبات المنتجات.
 - `src/components/AdminProductsPanel.tsx`: إدارة المنتجات والمخزون.
 - `src/components/AdminReportsPanel.tsx`: التقارير التشغيلية والمالية والتصدير CSV.
-- `src/components/VoiceAssistant.tsx`: المساعد الصوتي العربي الحالي.
+- `src/components/VoiceAssistant.tsx`: مساعد عربي بقواعد محلية يملأ مسودة الحجز عبر حالة التنقل؛ لا يستخدم AI خادميًا ولا يرسل الطلب تلقائيًا.
 - `supabase/migrations/`: migrations قاعدة البيانات؛ لا تستخدم `supabase db push` قبل تسوية السجل التاريخي.
 - `INCOMPLETE_UPDATES.md`: خارطة البنود غير المكتملة.
 - `PENDING_WORK.md`: سجل التنفيذ والملاحظات التاريخية.
@@ -238,16 +239,16 @@ git status --short --branch
 
 ## 11. آخر حالة تسليم
 
-آخر commit خاص بآخر تعديل موثق في المستودع هو:
+آخر إصدار منشور قبل متابعة إغلاق البنود كان:
 
 ```text
-10d59df fix: harden access policies and retry booking images
+032136797f029a1e6b9e8d1a4f84883b7de5427c — سجل التدقيق وRealtime
 ```
 
-وقبله:
+ومن الالتزامات التاريخية السابقة:
 
 ```text
 0582be3 feat: unify order center across dashboards
 ```
 
-المرجع التنفيذي الأساسي عند استلام المشروع هو هذا الملف مع `INCOMPLETE_UPDATES.md` و`SECURITY_RLS_REVIEW.md`.
+المرجع التنفيذي الأساسي عند استلام المشروع هو هذا الملف مع `INCOMPLETE_UPDATES.md` و`SECURITY_RLS_REVIEW.md`. بعد نشر تحديث جديد، راجع سجل GitHub وDeployments في Vercel بدل الاعتماد على المعرف التاريخي أعلاه.

@@ -131,15 +131,17 @@ function ServicesPage() {
 function BookingPage() {
   const { categories: serviceCategories, services: serviceList } = useCatalog()
   const [params] = useSearchParams()
+  const location = useLocation()
+  const assistantDraft = (location.state as { assistantDraft?: Partial<BookingDraft> } | null)?.assistantDraft
   const serviceReturnPath = `/book${params.toString() ? `?${params.toString()}` : ''}`
-  const serviceParam = params.get('service') ?? params.get('assistantService') ?? undefined
+  const serviceParam = params.get('service') ?? params.get('assistantService') ?? assistantDraft?.serviceId
   const navigate = useNavigate()
   const [authState, setAuthState] = useState<AuthState | null>(null)
   const [accountRole, setAccountRole] = useState<Role | null | undefined>(undefined)
   useEffect(() => { let active = true; getAuthState().then(async (state) => { if (!active) return; setAuthState(state); if (state.user) setAccountRole(await getMyRole()) }).catch(() => { if (active) setAuthState({ user: null, session: null }) }); return () => { active = false } }, [])
   const userId = authState?.user?.id
   const [step, setStep] = useState(1)
-  const [draft, setDraft] = useState<BookingDraft>({ ...initialDraft, serviceId: serviceParam })
+  const [draft, setDraft] = useState<BookingDraft>({ ...initialDraft, serviceId: serviceParam, issue: assistantDraft?.issue ?? '', city: assistantDraft?.city ?? '', district: assistantDraft?.district ?? '', address: assistantDraft?.address ?? '', urgency: assistantDraft?.urgency === 'urgent' ? 'urgent' : 'normal', locationSource: assistantDraft?.locationSource === 'manual' ? 'manual' : 'none' })
   const [draftOwner, setDraftOwner] = useState<string | null>(null)
   const [draftRestored, setDraftRestored] = useState(false)
   const [policyAccepted, setPolicyAccepted] = useState(false)
@@ -154,10 +156,16 @@ function BookingPage() {
     const key = `homefix-booking-draft-v1:${userId}`
     try {
       const saved = sessionStorage.getItem(key)
-      if (saved) { setDraft(restoreBookingDraft(saved, serviceParam)); setDraftRestored(true) }
+      if (saved) {
+        const restored = restoreBookingDraft(saved, serviceParam)
+        setDraft(assistantDraft ? { ...restored, ...assistantDraft, serviceId: assistantDraft.serviceId ?? restored.serviceId } : restored)
+        setDraftRestored(true)
+      } else if (assistantDraft) {
+        setDraft((current) => ({ ...current, ...assistantDraft, serviceId: assistantDraft.serviceId ?? current.serviceId }))
+      }
     } catch { /* التخزين المؤقت قد يكون معطلًا في وضع التصفح الخاص */ }
     setDraftOwner(userId)
-  }, [userId, serviceParam])
+  }, [userId, serviceParam, assistantDraft])
   useEffect(() => {
     if (!userId || draftOwner !== userId) return
     try { sessionStorage.setItem(`homefix-booking-draft-v1:${userId}`, JSON.stringify(draft)) } catch { /* لا نوقف الحجز إذا تعذر التخزين المؤقت */ }
