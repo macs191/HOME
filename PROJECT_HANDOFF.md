@@ -249,11 +249,15 @@ git status --short --branch
 
 ## 11. آخر حالة تسليم
 
-آخر إصدار منشور قبل متابعة إغلاق البنود كان:
+آخر إصدار منشور على Vercel Production:
 
 ```text
-032136797f029a1e6b9e8d1a4f84883b7de5427c — سجل التدقيق وRealtime
+635ac72b6be6e6b68264f00d821f205c4457e71d — إعداد مفتاح OpenAI الآمن والمساعد الاختياري
+Deployment: dpl_2iBEgkgLJJpDJEzhHf8HVKKKtGqk — READY
+Edge Functions: admin-ai-settings v2 وhome-assistant v2 — ACTIVE, verify_jwt=true
 ```
+
+النطاق الإنتاجي `https://home-macs191.vercel.app` أعاد HTTP 200 للمسارات `/`, `/login`, `/store`, `/admin/audit` و`/manus-routes.json`. تحققنا أيضًا أن حزمة JavaScript المنشورة تحتوي واجهة إعداد المفتاح ونص الموافقة. لم يُدخل المالك مفتاح OpenAI بعد؛ لذلك لم يُختبر الاتصال الفعلي بالمزود أو تدفقه بحساب عميل مسجل.
 
 ومن الالتزامات التاريخية السابقة:
 
