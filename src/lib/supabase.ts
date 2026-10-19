@@ -154,8 +154,27 @@ export async function createProductOrder(input: { items: { product_id: string; q
 }
 export async function getAdminProductOrders() {
   if (!supabase) return { data: [], error: null }
-  return supabase.from('product_orders').select('id,order_number,status,installation_requested,installation_status,city,district,address_text,notes,subtotal,discount_amount,total_amount,provider_id,created_at,profiles:customer_id(full_name,phone),product_order_items(product_name_snapshot,quantity,line_total)').order('created_at', { ascending: false }).limit(200)
+  return supabase.from('product_orders').select('id,order_number,status,installation_requested,installation_status,city,district,address_text,notes,subtotal,discount_amount,total_amount,provider_id,created_at,cancellation_reason,cancelled_at,refund_status,refund_amount,refund_method,refund_reference,profiles:customer_id(full_name,phone),product_order_items(product_name_snapshot,quantity,line_total)').order('created_at', { ascending: false }).limit(200)
 }
+export async function adminCancelProductOrder(orderId: string, reason: string, requestRefund = true) {
+  if (!supabase) throw new Error('المتجر غير متاح الآن.')
+  const { data, error } = await supabase.rpc('admin_cancel_product_order_safe', { p_order_id: orderId, p_reason: reason, p_request_refund: requestRefund })
+  if (error) throw new Error(error.message.includes('invalid_order_transition') ? 'لا يمكن إلغاء طلب مكتمل أو ملغى.' : error.message.includes('cancellation_reason_required') ? 'سبب الإلغاء مطلوب.' : error.message)
+  return data
+}
+export async function adminProcessProductRefund(orderId: string, method: string, reference = '') {
+  if (!supabase) throw new Error('المتجر غير متاح الآن.')
+  const { data, error } = await supabase.rpc('admin_process_product_refund_safe', { p_order_id: orderId, p_method: method, p_reference: reference })
+  if (error) throw new Error(error.message.includes('invalid_refund_transition') ? 'حالة الاسترداد لا تسمح بالتنفيذ.' : error.message)
+  return data
+}
+export async function adminRejectProductRefund(orderId: string, reason: string) {
+  if (!supabase) throw new Error('المتجر غير متاح الآن.')
+  const { data, error } = await supabase.rpc('admin_reject_product_refund_safe', { p_order_id: orderId, p_reason: reason })
+  if (error) throw error
+  return data
+}
+
 export async function updateProviderProductOrderStatus(orderId: string, status: string) {
   if (!supabase) throw new Error('المتجر غير متاح الآن.')
   const { data, error } = await supabase.rpc('provider_update_product_order_status', { p_order_id: orderId, p_status: status })
