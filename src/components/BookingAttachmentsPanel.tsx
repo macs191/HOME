@@ -14,15 +14,23 @@ export function BookingAttachmentsPanel({ bookingId, attachments, canUpload = fa
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [failureDetails, setFailureDetails] = useState<string[]>([])
+  const [failedUrls, setFailedUrls] = useState<string[]>([])
   const items = attachments ?? EMPTY_ATTACHMENTS
   useEffect(() => {
     let active = true
     Promise.all(items.map(async (item) => {
       try { return [item.id, await getBookingAttachmentUrl(item.storage_path)] as const }
       catch { return [item.id, ''] as const }
-    })).then((pairs) => { if (active) setUrls(Object.fromEntries(pairs)) })
+    })).then((pairs) => { if (active) { const next = Object.fromEntries(pairs); setUrls(next); setFailedUrls(items.filter((item) => !next[item.id]).map((item) => item.id)) } })
     return () => { active = false }
   }, [items])
+  const retryUrl = async (item: Attachment) => {
+    setMessage('جارٍ إعادة تحميل الصورة…')
+    try {
+      const url = await getBookingAttachmentUrl(item.storage_path)
+      setUrls((current) => ({ ...current, [item.id]: url })); setFailedUrls((current) => current.filter((id) => id !== item.id)); setMessage('تم تحميل الصورة بنجاح.')
+    } catch { setFailedUrls((current) => Array.from(new Set([...current, item.id]))); setMessage('تعذر تحميل الصورة. تحقق من الاتصال وحاول مرة أخرى.') }
+  }
   const upload = async () => {
     if (!files.length) { setMessage('اختر صورة واحدة على الأقل.'); return }
     setBusy(true); setMessage(''); setFailureDetails([])
@@ -39,7 +47,7 @@ export function BookingAttachmentsPanel({ bookingId, attachments, canUpload = fa
   }
   return <section className="booking-attachments" aria-label="صور الطلب">
     <div className="booking-attachments-head"><strong><ImageIcon size={16} /> صور العطل</strong><span>{items.length} صور</span></div>
-    {items.length > 0 ? <div className="booking-attachment-grid">{items.map((item, index) => <button type="button" className="booking-attachment-thumb" key={item.id} disabled={!urls[item.id]} onClick={() => setSelected(item.id)} aria-label={`عرض صورة العطل ${index + 1}`}>{urls[item.id] ? <img src={urls[item.id]} alt={`صورة العطل ${index + 1}`} loading="lazy" /> : <span className="booking-attachment-loading"><LoaderCircle size={18} /></span>}</button>)}</div> : <p className="muted booking-attachments-empty">لم تُرفق صور لهذا الطلب.</p>}
+    {items.length > 0 ? <div className="booking-attachment-grid">{items.map((item, index) => <div className="booking-attachment-item" key={item.id}>{urls[item.id] ? <button type="button" className="booking-attachment-thumb" onClick={() => setSelected(item.id)} aria-label={`عرض صورة العطل ${index + 1}`}><img src={urls[item.id]} alt={`صورة العطل ${index + 1}`} loading="lazy" onError={() => { setUrls((current) => ({ ...current, [item.id]: '' })); setFailedUrls((current) => Array.from(new Set([...current, item.id]))); setMessage('تعذر عرض الصورة؛ اضغط إعادة المحاولة.') }} /></button> : <button type="button" className="booking-attachment-thumb booking-attachment-failed" onClick={() => void retryUrl(item)} aria-label={`إعادة تحميل صورة العطل ${index + 1}`}><span className="booking-attachment-loading">{failedUrls.includes(item.id) ? <X size={18} /> : <LoaderCircle size={18} />}</span><small>إعادة المحاولة</small></button>}</div>)}</div> : <p className="muted booking-attachments-empty">لم تُرفق صور لهذا الطلب.</p>}
     {canUpload && items.length < 3 && <div className="booking-attachment-upload"><BookingPhotoPicker files={files} onChange={setFiles} maxFiles={3 - items.length} title="إضافة صور للطلب" description="يمكنك إرفاق حتى 3 صور، ولا ترفع بيانات شخصية غير لازمة." /><button type="button" className="button button-primary button-small" onClick={() => void upload()} disabled={busy || files.length === 0}>{busy ? <LoaderCircle size={15} className="spin" /> : <Camera size={15} />}{busy ? 'جارٍ رفع الصور…' : 'رفع الصور المحددة'}</button></div>}
     {message && <div className={message.includes('بقيت') || message.startsWith('تعذر') ? 'inline-error' : 'success-note'} role="status">{message.includes('بقيت') || message.startsWith('تعذر') ? <X size={15} /> : <Check size={15} />}{message}{failureDetails.length > 0 && <ul className="upload-failure-details">{failureDetails.map((detail) => <li key={detail}>{detail}</li>)}</ul>}</div>}
     {selected && <div className="booking-photo-viewer" role="dialog" aria-modal="true" aria-label="معاينة صورة العطل" onClick={() => setSelected(null)}><button type="button" className="icon-button" aria-label="إغلاق المعاينة" onClick={() => setSelected(null)}><X size={20} /></button>{urls[selected] && <img src={urls[selected]} alt="صورة العطل المكبرة" onClick={(event) => event.stopPropagation()} />}</div>}
