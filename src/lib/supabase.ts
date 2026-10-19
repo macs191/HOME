@@ -154,7 +154,7 @@ export async function createProductOrder(input: { items: { product_id: string; q
 }
 export async function getAdminProductOrders() {
   if (!supabase) return { data: [], error: null }
-  return supabase.from('product_orders').select('id,order_number,status,installation_requested,installation_status,city,district,address_text,notes,subtotal,discount_amount,total_amount,provider_id,created_at,cancellation_reason,cancelled_at,refund_status,refund_amount,refund_method,refund_reference,profiles:customer_id(full_name,phone),product_order_items(product_name_snapshot,quantity,line_total)').order('created_at', { ascending: false }).limit(200)
+  return supabase.from('product_orders').select('id,order_number,status,installation_requested,installation_status,city,district,address_text,notes,subtotal,discount_amount,total_amount,provider_id,created_at,cancellation_reason,cancelled_at,refund_status,refund_amount,refund_method,refund_reference,profiles:customer_id(full_name,phone),product_order_items(product_name_snapshot,quantity,line_total),product_installation_jobs(id,status,provider_id,scheduled_at,started_at,completed_at,completion_note),product_order_materials(id,material_name,quantity,unit_cost,source,created_at)').order('created_at', { ascending: false }).limit(200)
 }
 export async function adminCancelProductOrder(orderId: string, reason: string, requestRefund = true) {
   if (!supabase) throw new Error('المتجر غير متاح الآن.')
@@ -181,6 +181,13 @@ export async function updateProviderProductOrderStatus(orderId: string, status: 
   if (error) throw error
   return data
 }
+export async function addProductOrderMaterial(orderId: string, name: string, quantity: number, unitCost = 0, productId?: string) {
+  if (!supabase) throw new Error('المتجر غير متاح الآن.')
+  const { data, error } = await supabase.rpc('add_product_order_material', { p_order_id: orderId, p_material_name: name, p_quantity: quantity, p_unit_cost: unitCost, p_product_id: productId ?? null })
+  if (error) throw new Error(error.message.includes('invalid_material') ? 'بيانات المادة غير صحيحة.' : error.message)
+  return data
+}
+
 export async function adminAssignProductOrder(orderId: string, providerId: string) {
   if (!supabase) throw new Error('المتجر غير متاح الآن.')
   const { data, error } = await supabase.rpc('admin_assign_product_order', { p_order_id: orderId, p_provider_id: providerId })
