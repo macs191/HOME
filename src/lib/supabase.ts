@@ -90,6 +90,7 @@ export async function getLiveCatalog(): Promise<{ categories: ServiceCategory[];
 
 export type StoreCategory = { id: string; slug: string; name_ar: string; description: string | null; display_order: number; is_active: boolean }
 export type StoreProduct = { id: string; category_id: string; slug: string; name_ar: string; description: string; image_url: string | null; price: number; discount_percent: number; installation_available: boolean; is_active: boolean; is_featured: boolean; display_order: number; stock_quantity: number; reserved_quantity: number; low_stock_threshold: number; product_categories?: StoreCategory | StoreCategory[] }
+export type StoreCoupon = { id: string; code: string; discount_type: 'percentage' | 'fixed'; discount_value: number; starts_at: string; ends_at: string; max_uses: number | null; used_count: number; min_order_amount: number | null; is_active: boolean; applies_to: 'all' | 'product' | 'category'; product_id: string | null; category_id: string | null; once_per_customer: boolean }
 
 export async function getStoreCatalog(admin = false): Promise<{ categories: StoreCategory[]; products: StoreProduct[] }> {
   if (!supabase) return { categories: [], products: [] }
@@ -115,14 +116,31 @@ export async function saveStoreProduct(input: Partial<StoreProduct> & { category
   const result = id ? await supabase.from('products').update(payload).eq('id', id) : await supabase.from('products').insert(payload)
   if (result.error) throw result.error
 }
+export async function getStoreCoupons() {
+  if (!supabase) return { data: [], error: null }
+  return supabase.from('coupons').select('id,code,discount_type,discount_value,starts_at,ends_at,max_uses,used_count,min_order_amount,is_active,applies_to,product_id,category_id,once_per_customer').order('created_at', { ascending: false }).limit(200)
+}
+export async function saveStoreCoupon(input: Partial<StoreCoupon> & { code: string; discount_type: 'percentage' | 'fixed'; discount_value: number; starts_at: string; ends_at: string }) {
+  if (!supabase) throw new Error('المتجر غير متاح الآن.')
+  const { id, used_count, ...rest } = input
+  const payload = { ...rest, code: input.code.trim().toUpperCase(), discount_value: Number(input.discount_value), max_uses: input.max_uses === null || input.max_uses === undefined || (input.max_uses as any) === '' ? null : Number(input.max_uses), min_order_amount: input.min_order_amount === null || input.min_order_amount === undefined || (input.min_order_amount as any) === '' ? null : Number(input.min_order_amount) }
+  const result = id ? await supabase.from('coupons').update(payload).eq('id', id) : await supabase.from('coupons').insert(payload)
+  if (result.error) throw result.error
+}
+export async function deleteStoreCoupon(id: string) {
+  if (!supabase) throw new Error('المتجر غير متاح الآن.')
+  const { error } = await supabase.from('coupons').update({ is_active: false }).eq('id', id)
+  if (error) throw error
+}
+
 export async function getMyProductOrders() {
   if (!supabase) return { data: [], error: null }
   return supabase.from('product_orders').select('id,order_number,status,installation_requested,installation_status,city,district,address_text,notes,subtotal,discount_amount,total_amount,provider_id,created_at,product_order_items(id,product_name_snapshot,unit_price,discount_percent_snapshot,quantity,line_total)').order('created_at', { ascending: false }).limit(100)
 }
-export async function createProductOrder(input: { items: { product_id: string; quantity: number }[]; installationRequested: boolean; city: string; district: string; address: string; notes: string }) {
+export async function createProductOrder(input: { items: { product_id: string; quantity: number }[]; couponCode?: string; installationRequested: boolean; city: string; district: string; address: string; notes: string }) {
   if (!supabase) throw new Error('المتجر غير متاح الآن.')
-  const { data, error } = await supabase.rpc('create_product_order', { p_items: input.items, p_installation_requested: input.installationRequested, p_city: input.city, p_district: input.district, p_address_text: input.address, p_notes: input.notes })
-  if (error) { if (error.message.includes('insufficient_stock')) throw new Error('الكمية المطلوبة غير متوفرة حاليًا. حدّث السلة وحاول بكمية أقل.'); if (error.message.includes('product_not_available')) throw new Error('أحد المنتجات لم يعد متاحًا. حدّث المتجر وحاول مرة أخرى.'); throw new Error(error.message || 'تعذر إنشاء طلب المنتج.') }
+  const { data, error } = await supabase.rpc('create_product_order_v2', { p_items: input.items, p_coupon_code: input.couponCode ?? '', p_installation_requested: input.installationRequested, p_city: input.city, p_district: input.district, p_address_text: input.address, p_notes: input.notes })
+  if (error) { const message = error.message; if (message.includes('insufficient_stock')) throw new Error('الكمية المطلوبة غير متوفرة حاليًا. حدّث السلة وحاول بكمية أقل.'); if (message.includes('product_not_available')) throw new Error('أحد المنتجات لم يعد متاحًا. حدّث المتجر وحاول مرة أخرى.'); if (message.includes('coupon_invalid_or_expired')) throw new Error('كود الخصم غير صالح أو انتهت صلاحيته.'); if (message.includes('coupon_usage_limit_reached')) throw new Error('تم استنفاد عدد استخدامات هذا الكود.'); if (message.includes('coupon_minimum_not_met')) throw new Error('قيمة الطلب لا تحقق الحد الأدنى للكود.'); if (message.includes('coupon_already_used')) throw new Error('تم استخدام هذا الكود من قبل على حسابك.'); if (message.includes('coupon_not_applicable')) throw new Error('الكود لا ينطبق على المنتجات الموجودة في السلة.'); throw new Error(message || 'تعذر إنشاء طلب المنتج.') }
   return data
 }
 export async function getAdminProductOrders() {
