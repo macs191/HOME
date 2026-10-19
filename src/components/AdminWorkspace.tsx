@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Bell, Check, ChevronLeft, FilePlus, FileText, Gauge, Layers3, LogOut, MapPin, Navigation, Search, ShoppingBag, Send, Settings2, ShieldCheck, TicketPercent, TrendingUp, UsersRound, WalletCards, X } from 'lucide-react'
+import { ArrowLeft, Bell, Check, ChevronLeft, FilePlus, FileText, Gauge, Layers3, LogOut, MapPin, Navigation, Search, ShoppingBag, Send, Settings2, ShieldCheck, TicketPercent, TrendingUp, UsersRound, WalletCards, X, ClipboardList } from 'lucide-react'
 import { AdminMarketplacePanel } from './AdminMarketplacePanel'
 import { AdminProductsPanel } from './AdminProductsPanel'
 import { AdminManualBookingPanel } from './AdminManualBookingPanel'
@@ -15,15 +15,16 @@ import { MobileBottomNav } from './MobileBottomNav'
 import { NotificationsPanel } from './NotificationsPanel'
 import { InlineDocumentViewer } from './InlineDocumentViewer'
 import { UnifiedOrdersCenter } from './UnifiedOrdersCenter'
+import { AdminAuditPanel } from './AdminAuditPanel'
 
-type Section = 'overview' | 'new-order' | 'operations' | 'reports' | 'accounts' | 'applications' | 'catalog' | 'products' | 'quotes' | 'payments' | 'settings' | 'notifications'
+type Section = 'overview' | 'new-order' | 'operations' | 'reports' | 'accounts' | 'applications' | 'catalog' | 'products' | 'quotes' | 'payments' | 'settings' | 'notifications' | 'audit'
 const navItems: { id: Section; label: string; icon: typeof Gauge }[] = [
   { id: 'overview', label: 'نظرة عامة', icon: Gauge }, { id: 'new-order', label: 'إضافة طلب', icon: FilePlus }, { id: 'operations', label: 'الطلبات والإسناد', icon: FileText },
   { id: 'reports', label: 'التقارير', icon: TrendingUp }, { id: 'accounts', label: 'العملاء والفنيون', icon: UsersRound }, { id: 'applications', label: 'طلبات اعتماد الفنيين', icon: ShieldCheck }, { id: 'catalog', label: 'الأقسام والخدمات', icon: Layers3 }, { id: 'products', label: 'متجر المنتجات', icon: ShoppingBag },
   { id: 'quotes', label: 'عروض الأسعار', icon: TicketPercent }, { id: 'payments', label: 'الفواتير والتحصيل', icon: WalletCards },
-  { id: 'settings', label: 'إعدادات المنصة', icon: Settings2 }, { id: 'notifications', label: 'الإشعارات', icon: Bell },
+  { id: 'settings', label: 'إعدادات المنصة', icon: Settings2 }, { id: 'notifications', label: 'الإشعارات', icon: Bell }, { id: 'audit', label: 'سجل التدقيق', icon: ClipboardList },
 ]
-const sectionTitle: Record<Section, string> = { overview: 'نظرة عامة', 'new-order': 'إضافة طلب', operations: 'الطلبات والإسناد', reports: 'التقارير', accounts: 'العملاء والفنيون', applications: 'طلبات اعتماد الفنيين', catalog: 'الأقسام والخدمات', products: 'متجر المنتجات', quotes: 'عروض الأسعار', payments: 'الفواتير والتحصيل', settings: 'إعدادات المنصة', notifications: 'الإشعارات' }
+const sectionTitle: Record<Section, string> = { overview: 'نظرة عامة', 'new-order': 'إضافة طلب', operations: 'الطلبات والإسناد', reports: 'التقارير', accounts: 'العملاء والفنيون', applications: 'طلبات اعتماد الفنيين', catalog: 'الأقسام والخدمات', products: 'متجر المنتجات', quotes: 'عروض الأسعار', payments: 'الفواتير والتحصيل', settings: 'إعدادات المنصة', notifications: 'الإشعارات', audit: 'سجل التدقيق' }
 
 export function AdminWorkspace() {
   const { section: rawSection } = useParams()
@@ -100,12 +101,13 @@ export function AdminWorkspace() {
         {!loading && section === 'accounts' && <AdminAccountsPanel />}
         {section === 'notifications' && <NotificationsPanel />}
         {!loading && section === 'reports' && <AdminReportsPanel />}
+        {section === 'audit' && <AdminAuditPanel />}
         {section === 'new-order' && <AdminManualBookingPanel onCreated={() => void load()} />}
         {section === 'products' && <AdminProductsPanel />}
         {['catalog','quotes','payments','settings'].includes(section) && <AdminMarketplacePanel section={section as 'catalog'|'quotes'|'payments'|'settings'} />}
       </main>
     </div>
-    <MobileBottomNav items={navItems.filter(({ id }) => !['reports','applications','catalog','quotes','payments','settings','notifications'].includes(id)).map(({ id, label, icon }) => ({ to: `/admin/${id}`, label: id === 'overview' ? 'الرئيسية' : 'الطلبات', icon }))} activePath={location.pathname} />
+    <MobileBottomNav items={navItems.filter(({ id }) => !['reports','applications','catalog','quotes','payments','settings','notifications'].includes(id)).map(({ id, label, icon }) => ({ to: `/admin/${id}`, label: id === 'overview' ? 'الرئيسية' : id === 'audit' ? 'التدقيق' : 'الطلبات', icon }))} activePath={location.pathname} />
   </div>
 }
 

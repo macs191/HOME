@@ -593,6 +593,30 @@ export async function getAdminOperations() {
   return { recent: recentResult.data ?? [], assignable: assignableResult.data ?? [], providers: providerResult.data ?? [] }
 }
 
+export type AdminAuditLog = {
+  id: string | number
+  actor_id: string | null
+  action: string
+  entity_type: string
+  entity_id: string | null
+  metadata: Record<string, any> | null
+  created_at: string
+  actor?: { full_name: string | null } | null
+}
+
+export async function getAdminAuditLogs(filters: { from?: string; to?: string } = {}): Promise<AdminAuditLog[]> {
+  if (!supabase) throw new Error('سجل التدقيق غير متاح الآن.')
+  let request = supabase.from('audit_logs')
+    .select('id,actor_id,action,entity_type,entity_id,metadata,created_at,actor:profiles!audit_logs_actor_id_fkey(full_name)')
+    .order('created_at', { ascending: false })
+    .limit(250)
+  if (filters.from) request = request.gte('created_at', `${filters.from}T00:00:00.000Z`)
+  if (filters.to) request = request.lt('created_at', new Date(Date.parse(`${filters.to}T00:00:00.000Z`) + 86_400_000).toISOString())
+  const { data, error } = await request
+  if (error) throw new Error(error.message || 'تعذر تحميل سجل التدقيق.')
+  return (data ?? []) as unknown as AdminAuditLog[]
+}
+
 export async function getAdminOverview() {
   if (!supabase) return { bookings: 0, approvedProviders: 0, paidAmount: 0, openInvoices: 0, pendingQuotes: 0, unassignedBookings: 0 }
   const { data, error } = await supabase.rpc('admin_get_dashboard_metrics')
