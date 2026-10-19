@@ -866,6 +866,13 @@ export async function rejectProviderQuote(quoteId: string, note: string) {
   if (error) throw actionError(error, 'تعذر رفض عرض السعر. حدّث قائمة العروض وحاول مجددًا.')
   return data
 }
+export async function getAdminFinancialReport(from?: string, to?: string) {
+  if (!supabase) return null
+  const { data, error } = await supabase.rpc('admin_get_financial_report', { p_from: from || null, p_to: to || null })
+  if (error) throw actionError(error, 'تعذر تحميل التقرير المالي. تحقق من الفترة المحددة وحاول مجددًا.')
+  return data
+}
+
 export async function getAdminOperationalReport(from?: string, to?: string) {
   if (!supabase) return null
   const { data, error } = await supabase.rpc('admin_get_operational_report', { p_from: from || null, p_to: to || null })
