@@ -273,3 +273,24 @@ body:has(.install-guide-overlay) { overflow: hidden; }
 }
 .sort-button:hover { background: var(--surface-2); }
 .sort-button[aria-pressed="true"] { border-color: var(--teal-dark); color: var(--teal-dark); }
+
+
+.admin-ai-settings .panel-heading h2 { display: flex; align-items: center; gap: 9px; }
+.admin-ai-settings .panel-heading h2 svg { color: var(--teal-dark); flex: 0 0 auto; }
+.admin-ai-settings .status-pill-success { color: var(--teal-dark); border-color: var(--teal-dark); }
+.admin-ai-settings .security-note { display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-2); color: var(--muted); }
+.admin-ai-settings .security-note svg { flex: 0 0 auto; margin-top: 3px; color: var(--teal-dark); }
+.admin-ai-settings .security-note p { margin: 0; font-size: 12px; line-height: 1.85; }
+.admin-ai-settings > .muted { display: flex; align-items: center; gap: 7px; margin-top: 13px; font-size: 12px; }
+@media (max-width: 560px) {
+  .admin-ai-settings .panel-heading { align-items: flex-start; gap: 10px; }
+  .admin-ai-settings .button-row { flex-wrap: wrap; }
+  .admin-ai-settings .button-row .button { flex: 1 1 140px; }
+  .admin-ai-settings .security-note { padding: 11px; }
+}
+
+
+.voice-assistant-ai-consent { margin: 10px 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.voice-assistant-ai-consent p { margin: 0 0 10px; color: var(--muted); font-size: 12px; line-height: 1.75; }
+.voice-assistant-ai-consent .button-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.voice-assistant-ai-consent .button { flex: 1 1 145px; }

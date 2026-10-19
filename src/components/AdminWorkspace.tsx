@@ -16,6 +16,7 @@ import { NotificationsPanel } from './NotificationsPanel'
 import { InlineDocumentViewer } from './InlineDocumentViewer'
 import { UnifiedOrdersCenter } from './UnifiedOrdersCenter'
 import { AdminAuditPanel } from './AdminAuditPanel'
+import { AdminAISettingsPanel } from './AdminAISettingsPanel'
 
 type Section = 'overview' | 'new-order' | 'operations' | 'reports' | 'accounts' | 'applications' | 'catalog' | 'products' | 'quotes' | 'payments' | 'settings' | 'notifications' | 'audit'
 const navItems: { id: Section; label: string; icon: typeof Gauge }[] = [
@@ -105,6 +106,7 @@ export function AdminWorkspace() {
         {section === 'new-order' && <AdminManualBookingPanel onCreated={() => void load()} />}
         {section === 'products' && <AdminProductsPanel />}
         {['catalog','quotes','payments','settings'].includes(section) && <AdminMarketplacePanel section={section as 'catalog'|'quotes'|'payments'|'settings'} />}
+        {section === 'settings' && <AdminAISettingsPanel />}
       </main>
     </div>
     <MobileBottomNav items={navItems.filter(({ id }) => !['reports','applications','catalog','quotes','payments','settings','notifications'].includes(id)).map(({ id, label, icon }) => ({ to: `/admin/${id}`, label: id === 'overview' ? 'الرئيسية' : id === 'audit' ? 'التدقيق' : 'الطلبات', icon }))} activePath={location.pathname} />
