@@ -90,16 +90,19 @@ export async function getLiveCatalog(): Promise<{ categories: ServiceCategory[];
 
 export type StoreCategory = { id: string; slug: string; name_ar: string; description: string | null; display_order: number; is_active: boolean }
 export type StoreProduct = { id: string; category_id: string; slug: string; name_ar: string; description: string; image_url: string | null; price: number; discount_percent: number; installation_available: boolean; is_active: boolean; is_featured: boolean; display_order: number; stock_quantity: number; reserved_quantity: number; low_stock_threshold: number; product_categories?: StoreCategory | StoreCategory[] }
+export type StoreBundle = { id: string; slug: string; name_ar: string; description: string; image_url: string | null; price: number; is_active: boolean; is_featured: boolean; display_order: number; product_bundle_items?: Array<{ product_id: string; quantity: number; products?: StoreProduct }> }
 export type StoreCoupon = { id: string; code: string; discount_type: 'percentage' | 'fixed'; discount_value: number; starts_at: string; ends_at: string; max_uses: number | null; used_count: number; min_order_amount: number | null; is_active: boolean; applies_to: 'all' | 'product' | 'category'; product_id: string | null; category_id: string | null; once_per_customer: boolean }
 
-export async function getStoreCatalog(admin = false): Promise<{ categories: StoreCategory[]; products: StoreProduct[] }> {
-  if (!supabase) return { categories: [], products: [] }
+export async function getStoreCatalog(admin = false): Promise<{ categories: StoreCategory[]; products: StoreProduct[]; bundles: StoreBundle[] }> {
+  if (!supabase) return { categories: [], products: [], bundles: [] }
   const categoryQuery = supabase.from('product_categories').select('id,slug,name_ar,description,display_order,is_active').order('display_order')
   const productQuery = supabase.from('products').select('id,category_id,slug,name_ar,description,image_url,price,discount_percent,installation_available,is_active,is_featured,display_order,stock_quantity,reserved_quantity,low_stock_threshold,product_categories(id,slug,name_ar,description,display_order,is_active)').order('display_order')
-  const [categories, products] = await Promise.all([categoryQuery, productQuery])
+  const bundleQuery = supabase.from('product_bundles').select('id,slug,name_ar,description,image_url,price,is_active,is_featured,display_order,product_bundle_items(product_id,quantity,products(id,category_id,slug,name_ar,description,image_url,price,discount_percent,installation_available,is_active,is_featured,display_order,stock_quantity,reserved_quantity,low_stock_threshold))').order('display_order')
+  const [categories, products, bundles] = await Promise.all([categoryQuery, productQuery, bundleQuery])
   if (categories.error) throw categories.error
   if (products.error) throw products.error
-  return { categories: (categories.data ?? []) as StoreCategory[], products: (products.data ?? []).map((row: any) => ({ ...row, price: Number(row.price), discount_percent: Number(row.discount_percent) })) as StoreProduct[] }
+  if (bundles.error) throw bundles.error
+  return { categories: (categories.data ?? []) as StoreCategory[], products: (products.data ?? []).map((row: any) => ({ ...row, price: Number(row.price), discount_percent: Number(row.discount_percent) })) as StoreProduct[], bundles: (bundles.data ?? []).map((row: any) => ({ ...row, price: Number(row.price), product_bundle_items: (row.product_bundle_items ?? []).map((item: any) => ({ ...item, quantity: Number(item.quantity), products: item.products ? { ...item.products, price: Number(item.products.price), discount_percent: Number(item.products.discount_percent) } : undefined })) })) as StoreBundle[] }
 }
 
 export async function saveStoreCategory(input: Partial<StoreCategory> & { name_ar: string; slug: string }) {
@@ -115,6 +118,12 @@ export async function saveStoreProduct(input: Partial<StoreProduct> & { category
   const payload = { ...productFields, name_ar: input.name_ar.trim(), slug: input.slug.trim().toLowerCase(), price: Number(input.price), discount_percent: Number(input.discount_percent ?? 0), stock_quantity: Math.max(0, Math.floor(Number(input.stock_quantity ?? 0))), low_stock_threshold: Math.max(0, Math.floor(Number(input.low_stock_threshold ?? 5))) }
   const result = id ? await supabase.from('products').update(payload).eq('id', id) : await supabase.from('products').insert(payload)
   if (result.error) throw result.error
+}
+export async function saveStoreBundle(input: { id?: string; slug: string; name_ar: string; description: string; image_url?: string; price: number; is_active: boolean; is_featured: boolean; display_order: number; items: { product_id: string; quantity: number }[] }) {
+  if (!supabase) throw new Error('المتجر غير متاح الآن.')
+  const { data, error } = await supabase.rpc('admin_save_product_bundle', { p_id: input.id ?? null, p_slug: input.slug, p_name_ar: input.name_ar, p_description: input.description, p_image_url: input.image_url ?? '', p_price: Number(input.price), p_is_active: input.is_active, p_is_featured: input.is_featured, p_display_order: Number(input.display_order), p_items: input.items })
+  if (error) throw error
+  return data
 }
 export async function getStoreCoupons() {
   if (!supabase) return { data: [], error: null }
