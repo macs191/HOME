@@ -20,7 +20,9 @@ const actionErrors: Array<[string, string]> = [
   ['booking_not_unassignable', 'لا يمكن فك الإسناد بعد بدء التنفيذ أو وجود فاتورة.'],
   ['provider_not_approved_or_active', 'اختر فنيًا معتمدًا وحسابه نشط.'],
   ['provider_not_approved_or_inactive', 'اختر فنيًا معتمدًا وحسابه نشط.'],
-  ['provider_schedule_conflict', 'الفني لديه طلب آخر في اليوم والفترة نفسيهما.'],
+  ['provider_not_qualified_for_service', 'الفني لا يملك تخصصًا نشطًا يطابق الخدمة المطلوبة.'],
+  ['provider_schedule_conflict', 'لدى الفني طلب آخر في فترة متداخلة في اليوم نفسه.'],
+  ['provider_schedule_unavailable', 'الفني خارج الدوام أو في إجازة، أو أن الفترة لا تتوافق مع ساعات عمله المسجلة.'],
   ['booking_not_assignable', 'هذا الطلب لم يعد متاحًا للإسناد. حدّث القائمة وحاول مجددًا.'],
   ['quote_already_pending_or_accepted', 'يوجد عرض سعر قيد المراجعة أو معتمد لهذا الطلب بالفعل.'],
   ['work_or_rejected_quote_required', 'لا يمكن إرسال السعر إلا بعد بدء المهمة أو بعد إعادة عرض مرفوض.'],
@@ -845,6 +847,24 @@ export async function getBookingAttachmentUrl(path: string) {
   return data.signedUrl
 }
 
+export async function uploadBookingChatPhoto(bookingId: string, file: File) {
+  if (!supabase) throw new Error('خدمة المحادثة غير متاحة الآن.')
+  if (!bookingId || !file) throw new Error('اختر صورة صالحة للمحادثة.')
+  const userId = (await supabase.auth.getUser()).data.user?.id
+  if (!userId) throw new Error('سجّل الدخول لإرسال صورة.')
+  const blob = await prepareBookingPhoto(file)
+  const path = `${userId}/${bookingId}/chat/${crypto.randomUUID()}.jpg`
+  const { error } = await supabase.storage.from('booking-attachments').upload(path, blob, { contentType: 'image/jpeg', cacheControl: '3600', upsert: false })
+  if (error) throw actionError(error, 'تعذر رفع صورة المحادثة. تحقق من صلاحيتك وحجم الصورة.')
+  return path
+}
+
+export async function removeBookingChatPhoto(path: string) {
+  if (!supabase || !path) return
+  const { error } = await supabase.storage.from('booking-attachments').remove([path])
+  if (error) throw error
+}
+
 export async function updateMyAccountProfile(input: { fullName: string; phone: string; city: string; yearsExperience?: number; serviceDescription?: string }) {
   if (!supabase) throw new Error('خدمة الحساب غير متاحة الآن.')
   const { data, error } = await supabase.rpc('update_my_account_profile_safe', {
@@ -906,16 +926,17 @@ export async function getAdminOperationalReport(from?: string, to?: string) {
 
 export async function getBookingMessages(bookingId: string) {
   if (!supabase) return { data: [], error: new Error('خدمة المحادثة غير متاحة الآن.') }
-  return supabase.from('booking_messages').select('id,booking_id,sender_id,body,attachment_path,read_at,created_at').eq('booking_id', bookingId).order('created_at', { ascending: true }).limit(100)
+  const result = await supabase.from('booking_messages').select('id,booking_id,sender_id,body,attachment_path,read_at,created_at').eq('booking_id', bookingId).order('created_at', { ascending: false }).limit(100)
+  return { ...result, data: result.data ? [...result.data].reverse() : result.data }
 }
 
-export async function sendBookingMessage(bookingId: string, body: string) {
+export async function sendBookingMessage(bookingId: string, body: string, attachmentPath?: string | null) {
   if (!supabase) throw new Error('خدمة المحادثة غير متاحة الآن.')
   const text = body.trim()
-  if (!bookingId || text.length < 1 || text.length > 4000) throw new Error('اكتب رسالة بين حرف واحد و4000 حرف.')
+  if (!bookingId || (!text && !attachmentPath) || text.length > 4000) throw new Error('اكتب رسالة أو أرفق صورة، وبحد أقصى 4000 حرف.')
   const userId = (await supabase.auth.getUser()).data.user?.id
   if (!userId) throw new Error('سجّل الدخول لإرسال رسالة.')
-  const { data, error } = await supabase.from('booking_messages').insert({ booking_id: bookingId, sender_id: userId, body: text }).select('id,booking_id,sender_id,body,attachment_path,read_at,created_at').single()
+  const { data, error } = await supabase.from('booking_messages').insert({ booking_id: bookingId, sender_id: userId, body: text, attachment_path: attachmentPath ?? null }).select('id,booking_id,sender_id,body,attachment_path,read_at,created_at').single()
   if (error) throw new Error(error.message || 'تعذر إرسال الرسالة.')
   return data
 }

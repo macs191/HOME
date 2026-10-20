@@ -17,6 +17,7 @@ import { InlineDocumentViewer } from './InlineDocumentViewer'
 import { UnifiedOrdersCenter } from './UnifiedOrdersCenter'
 import { AdminAuditPanel } from './AdminAuditPanel'
 import { AdminAISettingsPanel } from './AdminAISettingsPanel'
+import { ActionConfirmDialog } from './ActionConfirmDialog'
 
 type Section = 'overview' | 'new-order' | 'operations' | 'reports' | 'accounts' | 'applications' | 'catalog' | 'products' | 'quotes' | 'payments' | 'settings' | 'notifications' | 'audit'
 const navItems: { id: Section; label: string; icon: typeof Gauge }[] = [
@@ -36,6 +37,7 @@ export function AdminWorkspace() {
   const [applications, setApplications] = useState<any[]>([])
   const [operations, setOperations] = useState<{ recent: any[]; assignable: any[]; providers: any[] }>({ recent: [], assignable: [], providers: [] })
   const [bookingId, setBookingId] = useState(''); const [providerId, setProviderId] = useState('')
+  const [pendingAssignment, setPendingAssignment] = useState<{ kind: 'manual'; bookingId: string; bookingNumber: number | string; providerId: string; providerName: string } | { kind: 'auto'; bookingId: string; bookingNumber: number | string } | null>(null)
   const [entryType, setEntryType] = useState<'late_penalty'|'adjustment'|'payout'>('late_penalty')
   const [amount, setAmount] = useState(''); const [note, setNote] = useState('')
   const [commissionInputs, setCommissionInputs] = useState<Record<string,string>>({})
@@ -65,8 +67,19 @@ export function AdminWorkspace() {
     catch (error) { setMessage(`تعذر إكمال العملية: ${error instanceof Error ? error.message : 'خطأ غير معروف'}`); return false }
     finally { setBusy(false) }
   }
-  const assign = () => { if (!bookingId || !providerId) return; void run(() => assignBookingToProvider(bookingId, providerId), 'تم إسناد الطلب للفني.', true).then((saved) => { if (saved) { setBookingId(''); setProviderId('') } }) }
-  const autoAssign = () => { if (!bookingId) return; void run(() => autoAssignBookingToNearestProvider(bookingId), 'تم تشغيل المطابقة التلقائية حسب التخصص والموقع الأساسي ضمن 50 كم.', true).then((saved) => { if (saved) setBookingId('') }) }
+  const assign = () => { if (!bookingId || !providerId || !selected) return; const chosen = eligibleProviders.find((provider) => provider.user_id === providerId); if (!chosen) return; setPendingAssignment({ kind: 'manual', bookingId, bookingNumber: selected.booking_number, providerId, providerName: chosen.profiles?.full_name ?? 'الفني المختار' }) }
+  const autoAssign = () => { if (!bookingId || !selected) return; setPendingAssignment({ kind: 'auto', bookingId, bookingNumber: selected.booking_number }) }
+  const confirmAssignment = async () => {
+    if (!pendingAssignment || busy) return
+    const action = pendingAssignment
+    const saved = await run(
+      () => action.kind === 'manual' ? assignBookingToProvider(action.bookingId, action.providerId) : autoAssignBookingToNearestProvider(action.bookingId),
+      action.kind === 'manual' ? `تم إسناد الطلب إلى ${action.providerName}.` : 'تم تشغيل المطابقة التلقائية حسب التخصص والموقع الأساسي ضمن 50 كم.',
+      true,
+    )
+    setPendingAssignment(null)
+    if (saved) { setBookingId(''); if (action.kind === 'manual') setProviderId('') }
+  }
   const addLedger = () => {
     if (!providerId || !Number.isFinite(Number(amount)) || Number(amount) === 0 || !note.trim()) { setMessage('اختر فنيًا، وأدخل مبلغًا غير صفري وسببًا واضحًا.'); return }
     void run(() => addProviderLedgerEntry(providerId, bookingId || null, entryType, Number(amount), note), 'تم حفظ القيد المالي في سجل الفني.', false).then((saved) => { if (saved) { setAmount(''); setNote('') } })
@@ -80,7 +93,7 @@ export function AdminWorkspace() {
   const handleSignout = async () => { setBusy(true); setMessage(''); try { await signOutAccount(); window.location.assign('/') } catch (error) { setMessage(`تعذر تسجيل الخروج: ${error instanceof Error ? error.message : 'حاول مرة أخرى.'}`) } finally { setBusy(false) } }
   const nav = (items: typeof navItems, label: string) => <nav className="dashboard-nav-links" aria-label={label}>{items.map(({ id, label, icon: Icon }) => <Link key={id} to={`/admin/${id}`} className={section === id ? 'active' : ''} aria-current={section === id ? 'page' : undefined}><Icon size={17} /><span>{label}</span><ChevronLeft size={15} className="nav-chevron" /></Link>)}</nav>
 
-  return <div className="container dashboard-page admin-workspace"><div className="dashboard-top"><div><span className="eyebrow">إدارة المنصة</span><h1>{sectionTitle[section]}</h1><p className="muted">تحكم مستقل وواضح في كل جزء من تشغيل المنصة.</p></div><div className="dashboard-top-actions"><Link to="/services" className="button button-secondary button-small"><Search size={15} /> معاينة الخدمات</Link><button type="button" className="button button-secondary button-small mobile-admin-signout" onClick={handleSignout}><LogOut size={15} /> تسجيل الخروج</button></div></div>
+  return <div className="container dashboard-page admin-workspace"><ActionConfirmDialog open={pendingAssignment !== null} title={pendingAssignment?.kind === 'manual' ? 'تأكيد إسناد الطلب' : 'تأكيد المطابقة التلقائية'} description={pendingAssignment?.kind === 'manual' ? `سيتم إسناد الطلب #${pendingAssignment.bookingNumber} إلى الفني ${pendingAssignment.providerName}. راجع الملخص قبل المتابعة.` : pendingAssignment ? `ستحاول المطابقة التلقائية اختيار فني مناسب للطلب #${pendingAssignment.bookingNumber} وفق التخصص والموقع والتوفر المسجل.` : ''} confirmLabel={pendingAssignment?.kind === 'manual' ? 'تأكيد الإسناد' : 'تشغيل المطابقة'} tone="primary" busy={busy} onCancel={() => setPendingAssignment(null)} onConfirm={confirmAssignment} /><div className="dashboard-top"><div><span className="eyebrow">إدارة المنصة</span><h1>{sectionTitle[section]}</h1><p className="muted">تحكم مستقل وواضح في كل جزء من تشغيل المنصة.</p></div><div className="dashboard-top-actions"><Link to="/services" className="button button-secondary button-small"><Search size={15} /> معاينة الخدمات</Link><button type="button" className="button button-secondary button-small mobile-admin-signout" onClick={handleSignout}><LogOut size={15} /> تسجيل الخروج</button></div></div>
       <div className="admin-top-nav admin-top-nav-primary">{nav(navItems.slice(0, 6), 'أقسام الإدارة الأساسية')}</div><div className="admin-top-nav admin-top-nav-secondary">{nav(navItems.slice(6), 'أدوات الإدارة')}</div><div className="dashboard-shell"><aside className="dashboard-nav"><div className="nav-user"><span className="user-avatar"><ShieldCheck size={18} /></span><div><strong>مدير المنصة</strong><small>إدارة العملاء والخدمات والطلبات</small></div></div>{nav(navItems, 'أقسام الإدارة')}<div className="nav-bottom"><Link to="/" className="button button-secondary button-wide">العودة للموقع</Link><button type="button" onClick={handleSignout} className="nav-logout"><LogOut size={15} /> تسجيل الخروج</button></div></aside>
       <main className="dashboard-content" key={section}>
         {message && <div className={message.startsWith('تعذر') ? 'inline-error' : 'success-note'} role={message.startsWith('تعذر') ? 'alert' : 'status'}>{message.startsWith('تعذر') ? <X size={16} /> : <Check size={16} />}{message}{message.startsWith('تعذر') && <button type="button" className="message-retry" onClick={() => void load()}>إعادة المحاولة</button>}</div>}
