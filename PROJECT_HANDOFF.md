@@ -29,7 +29,7 @@ HOME SERVICE هو سوق خدمات منزلية يعمل باللغة العر�
 - `src/App.tsx`: المسارات الرئيسية ولوحات العميل والفني وتدفق إنشاء الطلب.
 - `src/lib/supabase.ts`: عميل Supabase ودوال القراءة وRPCs والاشتراكات اللحظية.
 - `src/components/AdminWorkspace.tsx`: لوحة الإدارة والإسناد والعمليات.
-- `src/components/AdminAuditPanel.tsx`: البحث والتصفية في جزء من سجل التدقيق الإداري.
+- `src/components/AdminAuditPanel.tsx`: البحث والتصفية والتحميل المتدرج لدفعات سجل التدقيق الإداري.
 - `src/components/BookingAttachmentsPanel.tsx`: عرض صور الطلب ورفعها وإعادة المحاولة عند الفشل.
 - `src/components/BookingChat.tsx`: محادثة الطلب اللحظية مع صور JPEG خاصة وروابط مؤقتة.
 - `src/components/BookingStatusTimeline.tsx`: سجل انتقالات حالة الطلب.

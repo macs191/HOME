@@ -36,13 +36,19 @@ export function AdminAuditPanel() {
   const [appliedFrom, setAppliedFrom] = useState('')
   const [appliedTo, setAppliedTo] = useState('')
   const [loading, setLoading] = useState(true)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadedCount, setLoadedCount] = useState(0)
   const [error, setError] = useState('')
 
-  const load = async (dateFrom = appliedFrom, dateTo = appliedTo) => {
+  const load = async (dateFrom = appliedFrom, dateTo = appliedTo, append = false) => {
+    const offset = append ? loadedCount : 0
     setLoading(true)
     setError('')
     try {
-      setRows(await getAdminAuditLogs({ from: dateFrom || undefined, to: dateTo || undefined }))
+      const page = await getAdminAuditLogs({ from: dateFrom || undefined, to: dateTo || undefined, offset, limit: 50 })
+      setRows((current) => append ? [...current, ...page.rows.filter((row) => !current.some((item) => item.id === row.id))] : page.rows)
+      setLoadedCount(offset + page.rows.length)
+      setHasMore(page.hasMore)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'تعذر تحميل سجل التدقيق.')
     } finally {
@@ -80,7 +86,7 @@ export function AdminAuditPanel() {
   }
 
   return <section className="panel admin-audit-panel">
-    <div className="panel-heading"><div><span className="eyebrow">الحوكمة والشفافية</span><h2>سجل التدقيق</h2><p className="muted">أحدث 250 حدثًا متاحًا. لا تُعرض بيانات العناوين أو الهوية أو محتوى المحادثة.</p></div>
+      <div className="panel-heading"><div><span className="eyebrow">الحوكمة والشفافية</span><h2>سجل التدقيق</h2><p className="muted">يعرض السجل على دفعات. لا تُعرض بيانات العناوين أو الهوية أو محتوى المحادثة.</p></div>
       <button type="button" className="button button-secondary button-small" onClick={() => void load()} disabled={loading}><RefreshCw size={15} /> تحديث</button>
     </div>
     <form className="booking-filters admin-audit-filters" onSubmit={submitFilters}>
@@ -90,11 +96,12 @@ export function AdminAuditPanel() {
       <button type="submit" className="button button-primary button-small" disabled={loading}>تطبيق التصفية</button>
     </form>
     {error && <div className="inline-error" role="alert">{error}<button type="button" className="message-retry" onClick={() => void load()}>إعادة المحاولة</button></div>}
-    {loading ? <div className="loading-state">جارٍ تحميل سجل التدقيق…</div> : visibleRows.length ? <>
+    {loading && !rows.length ? <div className="loading-state">جارٍ تحميل سجل التدقيق…</div> : visibleRows.length ? <>
       <div className="admin-audit-table-wrap"><table className="admin-audit-table"><thead><tr><th>الوقت</th><th>الفاعل</th><th>الإجراء</th><th>نوع السجل</th><th>المعرّف</th><th>تفاصيل التغيير</th></tr></thead><tbody>
         {visibleRows.map((row) => <tr key={row.id}><td><time dateTime={row.created_at}>{new Intl.DateTimeFormat('ar-SA', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(row.created_at))}</time></td><td>{row.actor?.full_name ?? (row.actor_id ? 'مستخدم' : 'النظام')}</td><td>{actionLabels[row.action] ?? row.action}</td><td>{entityLabels[row.entity_type] ?? row.entity_type}</td><td><code>{row.entity_id ?? '—'}</code></td><td>{describeChanges(row)}</td></tr>)}
       </tbody></table></div>
-      <p className="muted admin-audit-count">{visibleRows.length} سجل معروض من آخر 250 حدثًا.</p>
+      <p className="muted admin-audit-count">{visibleRows.length} سجل ظاهر ضمن {rows.length} سجل محمّل.</p>
+      {hasMore && <button type="button" className="button button-secondary button-small" onClick={() => void load(appliedFrom, appliedTo, true)} disabled={loading}>{loading ? 'جارٍ التحميل…' : 'تحميل المزيد'}</button>}
     </> : <p className="empty-inline">لا توجد أحداث تطابق عوامل التصفية.</p>}
   </section>
 }

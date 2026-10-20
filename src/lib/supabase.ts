@@ -606,17 +606,21 @@ export type AdminAuditLog = {
   actor?: { full_name: string | null } | null
 }
 
-export async function getAdminAuditLogs(filters: { from?: string; to?: string } = {}): Promise<AdminAuditLog[]> {
+export async function getAdminAuditLogs(filters: { from?: string; to?: string; offset?: number; limit?: number } = {}): Promise<{ rows: AdminAuditLog[]; hasMore: boolean }> {
   if (!supabase) throw new Error('سجل التدقيق غير متاح الآن.')
+  const pageSize = Math.min(100, Math.max(1, Math.trunc(filters.limit ?? 50)))
+  const offset = Math.max(0, Math.trunc(filters.offset ?? 0))
   let request = supabase.from('audit_logs')
     .select('id,actor_id,action,entity_type,entity_id,metadata,created_at,actor:profiles!audit_logs_actor_id_fkey(full_name)')
     .order('created_at', { ascending: false })
-    .limit(250)
+    .order('id', { ascending: false })
+    .range(offset, offset + pageSize - 1)
   if (filters.from) request = request.gte('created_at', `${filters.from}T00:00:00.000Z`)
   if (filters.to) request = request.lt('created_at', new Date(Date.parse(`${filters.to}T00:00:00.000Z`) + 86_400_000).toISOString())
   const { data, error } = await request
   if (error) throw new Error(error.message || 'تعذر تحميل سجل التدقيق.')
-  return (data ?? []) as unknown as AdminAuditLog[]
+  const rows = (data ?? []) as unknown as AdminAuditLog[]
+  return { rows, hasMore: rows.length === pageSize }
 }
 
 export async function getAdminOverview() {
