@@ -256,7 +256,7 @@ git status --short --branch
 
 ## 11. آخر حالة تسليم
 
-آخر إصدار منشور على Vercel Production:
+آخر إصدار وظيفي (تغييرات التطبيق) منشور على Vercel Production:
 
 ```text
 f8761d60d02c78e05b9ddd4bc894c8f7bb6ff5d4 — تأكيدات الإجراءات ومرفقات المحادثة وربط دوام الفني
