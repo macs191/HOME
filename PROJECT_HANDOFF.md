@@ -259,12 +259,14 @@ git status --short --branch
 آخر إصدار منشور على Vercel Production:
 
 ```text
-635ac72b6be6e6b68264f00d821f205c4457e71d — إعداد مفتاح OpenAI الآمن والمساعد الاختياري
-Deployment: dpl_2iBEgkgLJJpDJEzhHf8HVKKKtGqk — READY
+f8761d60d02c78e05b9ddd4bc894c8f7bb6ff5d4 — تأكيدات الإجراءات ومرفقات المحادثة وربط دوام الفني
+Deployment: dpl_8sJxK73sS5RsSe5JS87tQrdun7U2 — READY
+Deployment URL: https://home-lhhr74ijo-macs191.vercel.app
+Supabase migrations: 20261020041714_booking_chat_attachments و20261020041807_booking_schedule_enforcement
 Edge Functions: admin-ai-settings v2 وhome-assistant v2 — ACTIVE, verify_jwt=true
 ```
 
-النطاق الإنتاجي `https://home-macs191.vercel.app` أعاد HTTP 200 للمسارات `/`, `/login`, `/store`, `/admin/audit` و`/manus-routes.json`. تحققنا أيضًا أن حزمة JavaScript المنشورة تحتوي واجهة إعداد المفتاح ونص الموافقة. لم يُدخل المالك مفتاح OpenAI بعد؛ لذلك لم يُختبر الاتصال الفعلي بالمزود أو تدفقه بحساب عميل مسجل.
+النطاق الإنتاجي `https://home-macs191.vercel.app` أعاد HTTP 200 للمسارات `/`, `/login`, `/store`, `/admin/audit` و`/manus-routes.json`. تحققنا أن حزمة JavaScript/CSS المنشورة تحتوي واجهة تأكيد الاسترداد، نصوص حراسة الجدول، وتنسيق الحوار المتجاوب. لم يُدخل المالك مفتاح OpenAI بعد؛ لذلك لم يُختبر الاتصال الفعلي بالمزود أو تدفقه بحساب عميل مسجل. لم يُجر اختبار تفاعلي للوحة المحمية بحساب مدير أو جلسات عميل/فني منفصلة.
 
 ومن الالتزامات التاريخية السابقة:
 
