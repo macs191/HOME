@@ -143,3 +143,15 @@
 ظهر تنبيه معلوماتي عن `public.home_ai_rate_limits` مع RLS دون سياسات. أكد استعلام حي عدم وجود سياسات وعدم امتلاك anon/authenticated/service_role صلاحية SELECT مباشرة، ما يمنع القراءة المباشرة؛ يبقى تأكيد أن الاستخدام عبر دوال SECURITY DEFINER مقصودًا. كما ظهر أن حماية كلمات المرور المسرّبة معطلة، ولم أغيّر إعدادات Auth. المعالجة الموثقة: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
 
 Performance Advisor أظهر 27 مفتاحًا أجنبيًا بلا فهرس، و25 تنبيهًا لإعادة تقييم auth داخل RLS لكل صف، و20 فهرسًا غير مستخدم وقت الرصد، و53 حالة سياسات permissive متعددة. هذه ملاحظات أداء/صيانة؛ بعضها متوقع في مشروع حديث أو ناتج عن سياسات admin/public متراكبة. لم تُنفذ تغييرات عليها ضمن هذه الدفعة.
+
+
+## مراجعة RPCs كروت الإسناد التلقائي — 22 أكتوبر 2026
+
+طُبقت `admin_auto_assignment_review` (`20261021230101`) على مشروع `macs`. لا تضيف migration جدولًا أو سياسة أو كتابة بيانات أعمال؛ تضيف `admin_confirm_auto_assignment_safe(uuid,uuid)` و`admin_update_auto_assigned_booking_safe(uuid,uuid,text,text,text,text,text,text,date,text,text)`. كلاهما `SECURITY DEFINER` ويثبت `search_path=public,pg_temp`، ويسحب EXECUTE من `PUBLIC,anon,authenticated` ثم يمنحه إلى `authenticated` فقط. التحقق الحي أكد عدم قدرة `anon` على التنفيذ؛ وكل دالة ترفض قبل أي عملية ما لم تنجح `public.is_admin()`.
+
+اعتماد الإسناد يقفل صف الحجز، ويتحقق أن الحالة `assigned` وأن `provider_id` موجود، وأن `assignment_history_id` هو أحدث حدث إسناد وأن ملاحظته تبدأ بعلامة المطابقة الآلية، ويمنع الاعتماد المكرر بمطابقة سجل التدقيق. ثم يعيد فحص تفعيل/اعتماد الفني وتخصص الخدمة وساعات التوفر والتعارضات قبل تسجيل `admin_auto_assignment_confirmed` وإرسال إشعارين. تعديل البيانات يقفل الصف نفسه ويعيد التحقق من الحدث الآلي المعلّق، ويقيد الحقول التشغيلية والطول/السبب والتاريخ والفترة؛ يطبق تحديث الموعد حارس الجدولة الموجود على `bookings`، ويمنع تعديل السعر/الدفع، ثم يسجل الحقول المتغيرة والسبب ويبلغ العميل والفني. لا توجد كتابة مباشرة من الواجهة إلى جدول الحجوزات لهذه العمليات.
+
+أظهر Security Advisor 54 ملاحظة عامة عن دوال `SECURITY DEFINER` المتاحة لـ`authenticated` (مقارنة بـ52 قبل هذه الإضافة)؛ الدالتان الجديدتان ضمنها لأنهما واجهة RPC للوحة الإدارة، مع صلاحية `authenticated` فقط وحارس `is_admin()` داخلي، ولا يستطيع `anon` التنفيذ. بقي تنبيه INFO عن `home_ai_rate_limits` بلا سياسات، وتحذير Auth لحماية كلمات المرور المسرّبة، وملاحظات الأداء السابقة. لم تُغيّر هذه الدفعة إعدادات Auth أو السياسات القائمة. اختُبرت تواقيع/ACL حيًا فقط؛ لم تُنفّذ عمليات تعديل فعلية على حجوزات إنتاجية.
+
+
+التحقق الحي الإضافي: أعمدة `audit_logs.action/entity_type/entity_id` من نوع `text` و`metadata` من نوع `jsonb`، وأعمدة `notifications.notification_type/target_path` من نوع `text`؛ وسياسة `audit logs admin read` تسمح بـSELECT لـ`authenticated` فقط عند تحقق `is_admin()`. لذلك استعلام استبعاد الطلبات المعتمدة لا يحتاج صلاحية قراءة إضافية، وقيم التدقيق/الإشعار الجديدة متوافقة مع أنواع الإنتاج.

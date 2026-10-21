@@ -40,6 +40,12 @@ const actionErrors: Array<[string, string]> = [
   ['paid_payment_cannot_be_reversed', 'لا يمكن إلغاء تحصيل مسجل؛ يلزم تسجيل عملية استرداد مستقلة.'],
   ['attachment_limit_reached', 'وصل الطلب إلى الحد الأقصى البالغ 3 صور.'],
   ['booking_not_attachable', 'لم يعد الطلب يقبل صورًا جديدة في هذه المرحلة.'],
+  ['auto_assignment_no_longer_pending', 'تغيّر الطلب أو الإسناد منذ فتح البطاقة. حدّث القائمة ثم راجع الحالة الحالية.'],
+  ['auto_assignment_already_reviewed', 'تم اعتماد هذا الإسناد من قبل. حدّث القائمة.'],
+  ['invalid_booking_details', 'تحقق من وصف المشكلة والعنوان والمدينة وتعليمات الوصول.'],
+  ['invalid_booking_schedule', 'اختر موعدًا وفترة صحيحة متوافقة مع نظام الجدولة.'],
+  ['booking_date_in_past', 'لا يمكن ضبط موعد الطلب على تاريخ مضى.'],
+  ['no_booking_changes', 'لم تتغير بيانات الطلب.'],
 ]
 
 function actionError(error: { message?: string }, fallback: string) {
@@ -582,17 +588,89 @@ export async function getAdminDocumentUrl(documentType: string, path: string, do
   return data.signedUrl
 }
 
-export async function getAdminOperations() {
-  if (!supabase) return { recent: [], assignable: [], providers: [] }
+export async function getAdminOperations(includeAutoReview = true, autoOffset = 0) {
+  if (!supabase) return { recent: [], assignable: [], providers: [], autoReview: [], autoReviewOffset: 0, autoReviewHasMore: false }
   const [recentResult, assignableResult, providerResult] = await Promise.all([
     supabase.from('bookings').select('id,booking_number,service_id,status,payment_status,cancellation_reason,provider_id,city,district,address_text,latitude,longitude,issue_description,created_at,services(name_ar),profiles!bookings_customer_id_fkey(full_name,phone),provider_profiles(profiles(full_name)),booking_status_history(id,from_status,to_status,note,created_at),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').order('created_at', { ascending: false }).limit(20),
     supabase.from('bookings').select('id,booking_number,service_id,status,payment_status,cancellation_reason,provider_id,city,district,address_text,latitude,longitude,issue_description,created_at,services(name_ar),profiles!bookings_customer_id_fkey(full_name,phone),provider_profiles(profiles(full_name)),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').is('provider_id', null).in('status', ['pending', 'quoted', 'accepted']).order('created_at', { ascending: true }).limit(100),
-    supabase.from('provider_profiles').select('user_id,base_latitude,base_longitude,service_radius_km,profiles(full_name,is_active),provider_services(service_id,is_active,services(id,name_ar,category_id))').eq('approval_status', 'approved').order('created_at', { ascending: true }).limit(100),
+    supabase.from('provider_profiles').select('user_id,approval_status,availability_status,base_latitude,base_longitude,service_radius_km,profiles(full_name,phone,is_active),provider_services(service_id,is_active,services(id,name_ar,category_id))').eq('approval_status', 'approved').order('created_at', { ascending: true }).limit(100),
   ])
   if (recentResult.error) throw recentResult.error
   if (assignableResult.error) throw assignableResult.error
   if (providerResult.error) throw providerResult.error
-  return { recent: recentResult.data ?? [], assignable: assignableResult.data ?? [], providers: providerResult.data ?? [] }
+
+  let autoReview: any[] = []
+  let autoReviewOffset = 0
+  let autoReviewHasMore = false
+  if (includeAutoReview) {
+    autoReviewOffset = Math.max(0, Math.floor(autoOffset / 100) * 100)
+    const autoAssignedResult = await supabase.from('bookings').select('id,booking_number,customer_id,service_id,provider_id,status,payment_status,city,district,address_text,access_notes,latitude,longitude,location_source,issue_description,urgency,scheduled_date,scheduled_slot,price_snapshot,created_at,updated_at,services(name_ar,pricing_type,base_price),profiles!bookings_customer_id_fkey(full_name,phone),booking_status_history(id,from_status,to_status,note,created_at),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at),payments(id,invoice_number,amount,status,payment_method,receipt_reference,review_note,created_at),booking_quotes(id,amount,note,status,created_at),provider_profiles(user_id,approval_status,availability_status,base_latitude,base_longitude,service_radius_km,profiles(full_name,phone,is_active),provider_services(service_id,is_active,services(name_ar)))').eq('status', 'assigned').not('provider_id', 'is', null).order('updated_at', { ascending: false }).order('id', { ascending: true }).range(autoReviewOffset, autoReviewOffset + 100)
+    if (autoAssignedResult.error) throw autoAssignedResult.error
+    autoReviewHasMore = (autoAssignedResult.data ?? []).length > 100
+    const pageRows = (autoAssignedResult.data ?? []).slice(0, 100)
+
+    const candidates = pageRows.flatMap((row: any) => {
+      const latestAssignment = [...(row.booking_status_history ?? [])]
+        .filter((event: any) => event.to_status === 'assigned')
+        .sort((a: any, b: any) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime() || String(b.id).localeCompare(String(a.id)))[0]
+      return latestAssignment?.id && latestAssignment.note?.startsWith('تمت المطابقة التلقائية')
+        ? [{ ...row, auto_assignment_history_id: latestAssignment.id, auto_assignment_note: latestAssignment.note }]
+        : []
+    })
+    let confirmedEvents = new Set<string>()
+    if (candidates.length) {
+      const { data: reviewRows, error: reviewError } = await supabase.from('audit_logs')
+        .select('entity_id,metadata')
+        .eq('entity_type', 'booking')
+        .eq('action', 'admin_auto_assignment_confirmed')
+        .in('entity_id', candidates.map((row: any) => row.id))
+        .limit(1000)
+      if (reviewError) throw reviewError
+      confirmedEvents = new Set((reviewRows ?? []).map((row: any) => row.metadata?.assignment_history_id).filter(Boolean))
+    }
+    autoReview = candidates.filter((row: any) => !confirmedEvents.has(row.auto_assignment_history_id)).sort((a: any, b: any) => new Date(a.updated_at ?? a.created_at ?? 0).getTime() - new Date(b.updated_at ?? b.created_at ?? 0).getTime())
+  }
+  return { recent: recentResult.data ?? [], assignable: assignableResult.data ?? [], providers: providerResult.data ?? [], autoReview, autoReviewOffset, autoReviewHasMore }
+}
+
+export type AdminAutoAssignmentEdit = {
+  issue_description: string
+  urgency: 'normal' | 'urgent'
+  city: string
+  district: string
+  address_text: string
+  access_notes: string
+  scheduled_date: string
+  scheduled_slot: string
+}
+
+export async function confirmAdminAutoAssignment(bookingId: string, assignmentHistoryId: string) {
+  if (!supabase) throw new Error('مراجعة الإسناد التلقائي غير متاحة الآن.')
+  const { data, error } = await supabase.rpc('admin_confirm_auto_assignment_safe', {
+    p_booking_id: bookingId,
+    p_assignment_history_id: assignmentHistoryId,
+  })
+  if (error) throw actionError(error, 'تعذر اعتماد الإسناد. حدّث القائمة وحاول مجددًا.')
+  return data
+}
+
+export async function updateAutoAssignedBooking(bookingId: string, assignmentHistoryId: string, edit: AdminAutoAssignmentEdit, reason: string) {
+  if (!supabase) throw new Error('تعديل الطلب غير متاح الآن.')
+  const { data, error } = await supabase.rpc('admin_update_auto_assigned_booking_safe', {
+    p_booking_id: bookingId,
+    p_assignment_history_id: assignmentHistoryId,
+    p_issue_description: edit.issue_description.trim(),
+    p_urgency: edit.urgency,
+    p_city: edit.city.trim(),
+    p_district: edit.district.trim() || null,
+    p_address_text: edit.address_text.trim(),
+    p_access_notes: edit.access_notes.trim() || null,
+    p_scheduled_date: edit.scheduled_date || null,
+    p_scheduled_slot: edit.scheduled_slot || null,
+    p_reason: reason.trim(),
+  })
+  if (error) throw actionError(error, 'تعذر حفظ تفاصيل الطلب. راجع البيانات والجدولة ثم حاول مجددًا.')
+  return data
 }
 
 export type AdminAuditLog = {

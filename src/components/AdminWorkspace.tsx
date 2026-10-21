@@ -6,6 +6,7 @@ import { AdminProductsPanel } from './AdminProductsPanel'
 import { AdminManualBookingPanel } from './AdminManualBookingPanel'
 import { AdminAccountsPanel } from './AdminAccountsPanel'
 import { AdminBookingActions } from './AdminBookingActions'
+import { AdminAutoAssignmentReviewPanel } from './AdminAutoAssignmentReviewPanel'
 import { AdminReportsPanel } from './AdminReportsPanel'
 import { BookingAttachmentsPanel } from './BookingAttachmentsPanel'
 import { BookingStatusTimeline } from './BookingStatusTimeline'
@@ -35,7 +36,7 @@ export function AdminWorkspace() {
   const navigate = useNavigate(); const location = useLocation()
   const [overview, setOverview] = useState<any>(null)
   const [applications, setApplications] = useState<any[]>([])
-  const [operations, setOperations] = useState<{ recent: any[]; assignable: any[]; providers: any[] }>({ recent: [], assignable: [], providers: [] })
+  const [operations, setOperations] = useState<{ recent: any[]; assignable: any[]; providers: any[]; autoReview: any[]; autoReviewOffset: number; autoReviewHasMore: boolean }>({ recent: [], assignable: [], providers: [], autoReview: [], autoReviewOffset: 0, autoReviewHasMore: false })
   const [bookingId, setBookingId] = useState(''); const [providerId, setProviderId] = useState('')
   const [pendingAssignment, setPendingAssignment] = useState<{ kind: 'manual'; bookingId: string; bookingNumber: number | string; providerId: string; providerName: string } | { kind: 'auto'; bookingId: string; bookingNumber: number | string } | null>(null)
   const [entryType, setEntryType] = useState<'late_penalty'|'adjustment'|'payout'>('late_penalty')
@@ -52,7 +53,7 @@ export function AdminWorkspace() {
   const load = async () => {
     setLoading(true); setMessage('')
     try {
-      if (section === 'overview') { const [metrics, ops] = await Promise.all([getAdminOverview(), getAdminOperations()]); setOverview(metrics); setOperations(ops) }
+      if (section === 'overview') { const [metrics, ops] = await Promise.all([getAdminOverview(), getAdminOperations(false)]); setOverview(metrics); setOperations(ops) }
       else if (section === 'operations') setOperations(await getAdminOperations())
       else if (section === 'applications') { const result = await getAdminProviderApplications(); if (result.error) throw result.error; setApplications((result.data as any[]) ?? []) }
     } catch (error) { setMessage(`تعذر تحميل ${sectionTitle[section]}: ${error instanceof Error ? error.message : 'خطأ غير معروف'}`); return false }
@@ -65,6 +66,15 @@ export function AdminWorkspace() {
     setBusy(true); setMessage('')
     try { await action(); const refreshed = reload ? await load() : true; if (refreshed) setMessage(success); return true }
     catch (error) { setMessage(`تعذر إكمال العملية: ${error instanceof Error ? error.message : 'خطأ غير معروف'}`); return false }
+    finally { setBusy(false) }
+  }
+  const loadOlderAutoReviews = async () => {
+    if (busy || loading || !operations.autoReviewHasMore) return
+    setBusy(true); setMessage('')
+    try {
+      const page = await getAdminOperations(true, operations.autoReviewOffset + 100)
+      setOperations((current) => ({ ...current, autoReview: [...current.autoReview, ...page.autoReview].sort((a, b) => new Date(a.updated_at ?? a.created_at ?? 0).getTime() - new Date(b.updated_at ?? b.created_at ?? 0).getTime()), autoReviewOffset: page.autoReviewOffset, autoReviewHasMore: page.autoReviewHasMore }))
+    } catch (error) { setMessage(`تعذر تحميل إسنادات أقدم: ${error instanceof Error ? error.message : 'حاول مرة أخرى.'}`) }
     finally { setBusy(false) }
   }
   const assign = () => { if (!bookingId || !providerId || !selected) return; const chosen = eligibleProviders.find((provider) => provider.user_id === providerId); if (!chosen) return; setPendingAssignment({ kind: 'manual', bookingId, bookingNumber: selected.booking_number, providerId, providerName: chosen.profiles?.full_name ?? 'الفني المختار' }) }
@@ -104,7 +114,7 @@ export function AdminWorkspace() {
         ].map(([label, value, Icon]: any) => <div className="metric-card" key={label}><span className="metric-icon"><Icon size={18} /></span><span className="muted">{label}</span><strong>{value}</strong></div>)}</div>
           <section className="panel"><div className="panel-heading"><div><span className="eyebrow">آخر النشاط</span><h2>الطلبات الأخيرة</h2></div><Link className="text-link" to="/admin/operations">فتح الطلبات والإسناد <ArrowLeft size={15} /></Link></div>{operations.recent.length ? <div className="booking-list">{operations.recent.map((item) => <Link className="booking-row admin-booking-link" to={`/admin/operations?booking=${item.id}`} key={item.id}><div><span className="eyebrow">طلب #{item.booking_number}</span><h3>{item.services?.name_ar ?? 'خدمة منزلية'}</h3><p>{item.profiles?.full_name ?? 'عميل'} · {item.profiles?.phone ?? 'بدون رقم'} · {item.city}</p><small>اضغط لفتح الإسناد والصور والتحكم</small></div><span className="status-pill">{item.status}</span></Link>)}</div> : <p className="empty-inline">لا توجد طلبات حتى الآن.</p>}</section>
           <div className="admin-shortcuts">{navItems.filter((item) => item.id !== 'overview').map(({ id,label,icon:Icon }) => <Link className="admin-shortcut" key={id} to={`/admin/${id}`}><Icon size={18} /><strong>{label}</strong><ChevronLeft size={15} /></Link>)}</div></>}
-        {!loading && section === 'operations' && <><UnifiedOrdersCenter role="admin" items={[...operations.assignable, ...operations.recent.filter((row) => !operations.assignable.some((item) => item.id === row.id))]} loading={false} error={message} onRefresh={() => void load()}><></></UnifiedOrdersCenter><section className="panel admin-operations"><div className="panel-heading"><div><span className="eyebrow">التشغيل</span><h2>إسناد طلب لفني معتمد</h2><p className="muted">يعرض الاختيار فنيين معتمدين مسجلين بالتخصص المطابق فقط.</p></div></div>
+        {!loading && section === 'operations' && <><AdminAutoAssignmentReviewPanel bookings={operations.autoReview} providers={operations.providers} busy={busy} hasMore={operations.autoReviewHasMore} onLoadMore={loadOlderAutoReviews} onComplete={load} /><UnifiedOrdersCenter role="admin" items={[...operations.assignable, ...operations.recent.filter((row) => !operations.assignable.some((item) => item.id === row.id))]} loading={false} error={message} onRefresh={() => void load()}><></></UnifiedOrdersCenter><section className="panel admin-operations"><div className="panel-heading"><div><span className="eyebrow">التشغيل</span><h2>إسناد طلب لفني معتمد</h2><p className="muted">يعرض الاختيار فنيين معتمدين مسجلين بالتخصص المطابق فقط.</p></div></div>
           <div className="booking-filters admin-booking-filters"><label className="accounts-search"><Search size={16} /><input value={operationsQuery} onChange={(event) => setOperationsQuery(event.target.value)} placeholder="ابحث برقم الطلب أو العميل أو المدينة" /></label><select aria-label="تصفية حالة الطلب" value={operationsStatus} onChange={(event) => setOperationsStatus(event.target.value)}><option value="all">كل الحالات</option><option value="pending">قيد المراجعة</option><option value="quoted">بانتظار العرض</option><option value="accepted">مقبول</option><option value="assigned">مسند</option><option value="in_progress">قيد التنفيذ</option><option value="completed">مكتمل</option><option value="cancelled">ملغى</option></select></div><div className="field-grid"><label className="field-label">الطلب<select value={bookingId} onChange={(e) => { setBookingId(e.target.value); setProviderId('') }}><option value="">اختر طلبًا غير مسند</option>{filteredAssignable.map((row) => <option key={row.id} value={row.id}>#{row.booking_number} · {row.services?.name_ar ?? 'خدمة'} · {row.city}</option>)}</select></label><label className="field-label">الفني المطابق<select value={providerId} onChange={(e) => setProviderId(e.target.value)} disabled={!bookingId}><option value="">اختر فنيًا</option>{eligibleProviders.map((row) => <option key={row.user_id} value={row.user_id}>{row.profiles?.full_name ?? 'فني'}</option>)}</select></label></div>
           <div className="button-row"><button type="button" className="button button-primary" onClick={assign} disabled={busy || !bookingId || !providerId}><Send size={15} /> إسناد يدوي</button><button type="button" className="button button-secondary" onClick={autoAssign} disabled={busy || !bookingId}><Navigation size={15} /> المطابقة التلقائية الأقرب</button></div>{bookingId && !eligibleProviders.length && <div className="inline-error">لا يوجد فني معتمد بهذا التخصص حاليًا.</div>}
           <div className="admin-assignable-list">{filteredAssignable.map((row) => <article className="admin-assignable-row" key={row.id}><div><strong>#{row.booking_number} · {row.services?.name_ar ?? 'خدمة'}</strong><small>{row.profiles?.full_name ?? 'عميل'} · {row.profiles?.phone ?? 'بدون رقم'}</small><small>{[row.address_text,row.district,row.city].filter(Boolean).join(' · ')}</small><p>{row.issue_description}</p><BookingAttachmentsPanel bookingId={row.id} attachments={row.attachments ?? row.booking_attachments ?? []} canUpload={false} /><BookingStatusTimeline events={row.booking_status_history} /><BookingChat bookingId={row.id} /></div><div><a className="text-link" target="_blank" rel="noreferrer" href={row.latitude != null && row.longitude != null ? `https://www.google.com/maps/search/?api=1&query=${row.latitude},${row.longitude}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([row.address_text,row.district,row.city].filter(Boolean).join(' '))}`}><MapPin size={15} /> فتح الموقع</a><AdminBookingActions booking={row} providers={operations.providers} busy={busy} onComplete={load} /></div></article>)}</div>
