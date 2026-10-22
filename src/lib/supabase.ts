@@ -460,7 +460,7 @@ export async function getMyProviderProfile() {
 
 export async function getProviderWorkQueue() {
   if (!supabase) return { data: [], error: null }
-  return supabase.from('bookings').select('id,booking_number,status,payment_status,cancellation_reason,city,district,address_text,access_notes,latitude,longitude,issue_description,scheduled_date,scheduled_slot,price_snapshot,provider_amount_snapshot,tracking_consent_at,tracking_revoked_at,created_at,services(name_ar,pricing_type,base_price),profiles!bookings_customer_id_fkey(full_name,phone),booking_quotes(id,amount,note,status,admin_review_note,created_at),booking_status_history(id,from_status,to_status,note,created_at),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').eq('provider_id', (await supabase.auth.getUser()).data.user?.id ?? '').order('created_at', { ascending: false }).limit(50)
+  return supabase.from('bookings').select('id,booking_number,status,payment_status,cancellation_reason,city,district,address_text,access_notes,latitude,longitude,issue_description,scheduled_date,scheduled_slot,price_snapshot,provider_amount_snapshot,tracking_consent_at,tracking_revoked_at,created_at,services(name_ar,pricing_type,base_price),profiles!bookings_customer_id_fkey(full_name,phone),payments(id,invoice_number,amount,status,payment_method,cash_received_amount,review_note,created_at),booking_quotes(id,amount,note,status,admin_review_note,created_at),booking_status_history(id,from_status,to_status,note,created_at),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').eq('provider_id', (await supabase.auth.getUser()).data.user?.id ?? '').order('created_at', { ascending: false }).limit(50)
 }
 
 export async function getProviderLedger() {
@@ -866,6 +866,13 @@ export async function changeInvoicePayment(paymentId: string, method: 'cash' | '
   if (!supabase) throw new Error('خدمة الدفع غير متاحة الآن.')
   const { data, error } = await supabase.rpc('customer_change_invoice_payment', { p_payment_id: paymentId, p_method: method })
   if (error) throw new Error(error.message || 'تعذر تغيير طريقة الدفع.')
+  return data
+}
+
+export async function providerConfirmCashPayment(paymentId: string, receivedAmount: number) {
+  if (!supabase) throw new Error('خدمة تأكيد الدفع غير متاحة الآن.')
+  const { data, error } = await supabase.rpc('provider_confirm_cash_payment', { p_payment_id: paymentId, p_received_amount: Number(receivedAmount) })
+  if (error) throw actionError(error, 'تعذر تأكيد الدفع النقدي. تحقق من المبلغ وحالة الطلب.')
   return data
 }
 
