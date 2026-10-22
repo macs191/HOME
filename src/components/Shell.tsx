@@ -75,7 +75,7 @@ export function Shell({ children, theme, onThemeChange }: { children: ReactNode;
     try { await installPrompt.prompt(); const choice = await installPrompt.userChoice; setInstallPrompt(null); if (choice.outcome === 'accepted') setAppInstalled(true) } catch { setInstallGuideOpen(true) }
   }
   const handleSignOut = async () => { setSigningOut(true); try { await signOutAccount(); window.location.assign('/') } catch { setSigningOut(false) } }
-  const nav = [{ to: '/', label: 'الرئيسية' }, { to: '/services', label: 'الخدمات' }, { to: '/book', label: 'اطلب خدمة' }, { to: '/customer/login', label: 'دخول العملاء' }, { to: '/provider/login', label: 'دخول الفنيين' }]
+  const nav = [{ to: '/', label: 'الرئيسية' }, { to: '/services', label: 'الخدمات' }, { to: '/about', label: 'عن هوم سيرفس' }, { to: '/book', label: 'اطلب خدمة' }, { to: '/customer/login', label: 'دخول العملاء' }, { to: '/provider/login', label: 'دخول الفنيين' }]
 
   return <div className="app-shell">
     <header className="topbar"><div className="topbar-inner">
@@ -85,7 +85,7 @@ export function Shell({ children, theme, onThemeChange }: { children: ReactNode;
     </div></header>
     {profileOpen && <div className="profile-hub-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setProfileOpen(false) }}><ProfileHub role={role} onClose={() => setProfileOpen(false)} onSignOut={() => void handleSignOut()} signingOut={signingOut} /></div>}
     <main>{children}</main>
-    <footer className="footer"><div className="container footer-grid"><div><BrandMark /><p className="muted footer-copy">منصة تربطك بفني مناسب، في الوقت المناسب.</p></div><div><strong>روابط سريعة</strong><Link to="/services">استعرض الخدمات</Link><Link to="/book">أنشئ طلبًا</Link></div><div><strong>حسابات المنصة</strong><Link to="/customer/login">دخول العملاء</Link><Link to="/provider/login">دخول الفنيين</Link><Link to="/admin">لوحة الإدارة</Link></div><div><strong>الدعم</strong><Link to="/customer/login">فتح لوحة العميل</Link></div></div><div className="container footer-bottom"><span>© 2026 هوم سيرفس</span></div></footer>
+    <footer className="footer"><div className="container footer-grid"><div><BrandMark /><p className="muted footer-copy">منصة تربطك بفني مناسب، في الوقت المناسب.</p></div><div><strong>روابط سريعة</strong><Link to="/services">استعرض الخدمات</Link><Link to="/book">أنشئ طلبًا</Link><Link to="/about">عن هوم سيرفس</Link></div><div><strong>حسابات المنصة</strong><Link to="/customer/login">دخول العملاء</Link><Link to="/provider/login">دخول الفنيين</Link><Link to="/admin">لوحة الإدارة</Link></div><div><strong>الدعم والخصوصية</strong><Link to="/customer/login">فتح لوحة العميل</Link><Link to="/privacy">الخصوصية والحماية</Link><Link to="/downloads">تحميل التطبيقات</Link></div></div><div className="container footer-bottom"><span>© 2026 هوم سيرفس</span></div></footer>
     {installGuideOpen && <InstallGuide onClose={() => setInstallGuideOpen(false)} />}
   </div>
 }

@@ -21,6 +21,7 @@ import { ProviderProductOrdersPanel, StorePage, StoreOrdersPanel } from './compo
 import { VoiceAssistant } from './components/VoiceAssistant'
 import { UnifiedOrdersCenter } from './components/UnifiedOrdersCenter'
 import { DownloadPage } from './components/DownloadPage'
+import { AboutPage, PrivacyPage } from './components/PublicInfoPages'
 import { GoogleProfileCompletionPage, LoginPage, OAuthCallbackPage } from './components/AuthPages'
 const MapPicker = lazy(() => import('./components/MapPicker').then((module) => ({ default: module.MapPicker })))
 import { categories, getCategory, getService, services } from './lib/data'
@@ -64,7 +65,7 @@ function App() {
     const authSubscription = onAuthStateChange((next) => { if (next.user) void requestAndroidNotifications() })
     return () => { cleanup?.(); authSubscription.unsubscribe() }
   }, [])
-  return <Shell theme={theme} onThemeChange={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><NotificationMonitor /><Routes><Route path="/" element={<HomePage />} /><Route path="/services" element={<ServicesPage />} /> <Route path="/downloads" element={<DownloadPage />} /><Route path="/store" element={<StorePage />} /><Route path="/book" element={<BookingPage />} /><Route path="/customer/:section?" element={<ProtectedRoute requiredRole="customer"><CustomerPage /></ProtectedRoute>} /><Route path="/provider/:section?" element={<ProtectedRoute requiredRole="provider"><ProviderPage /></ProtectedRoute>} /><Route path="/admin/:section?" element={<ProtectedRoute requiredRole="admin"><AdminPage /></ProtectedRoute>} /><Route path="/login" element={<LoginPage />} /><Route path="/customer/login" element={<LoginPage fixedRole="customer" />} /><Route path="/provider/login" element={<LoginPage fixedRole="provider" />} /><Route path="/auth/callback" element={<OAuthCallbackPage />} /><Route path="/auth/complete-profile" element={<GoogleProfileCompletionPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></Shell>
+  return <Shell theme={theme} onThemeChange={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><NotificationMonitor /><Routes><Route path="/" element={<HomePage />} /><Route path="/services" element={<ServicesPage />} /> <Route path="/about" element={<AboutPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/downloads" element={<DownloadPage />} /><Route path="/store" element={<StorePage />} /><Route path="/book" element={<BookingPage />} /><Route path="/customer/:section?" element={<ProtectedRoute requiredRole="customer"><CustomerPage /></ProtectedRoute>} /><Route path="/provider/:section?" element={<ProtectedRoute requiredRole="provider"><ProviderPage /></ProtectedRoute>} /><Route path="/admin/:section?" element={<ProtectedRoute requiredRole="admin"><AdminPage /></ProtectedRoute>} /><Route path="/login" element={<LoginPage />} /><Route path="/customer/login" element={<LoginPage fixedRole="customer" />} /><Route path="/provider/login" element={<LoginPage fixedRole="provider" />} /><Route path="/auth/callback" element={<OAuthCallbackPage />} /><Route path="/auth/complete-profile" element={<GoogleProfileCompletionPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></Shell>
 }
 
 function useCatalog() {

@@ -2,6 +2,8 @@
   "routes": [
     { "path": "/", "title": "الرئيسية" },
     { "path": "/services", "title": "الخدمات" },
+    { "path": "/about", "title": "عن هوم سيرفس" },
+    { "path": "/privacy", "title": "الخصوصية والحماية" },
     { "path": "/store", "title": "متجر المنتجات" },
     { "path": "/book", "title": "إنشاء طلب" },
     { "path": "/customer/overview", "title": "مساحة العميل" },

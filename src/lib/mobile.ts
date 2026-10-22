@@ -18,6 +18,11 @@ function openAppUrl(url: string) {
   } catch { /* تجاهل الروابط غير الصالحة */ }
 }
 
+function safeTargetPath(value: unknown) {
+  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return '/customer/notifications'
+  return value
+}
+
 export async function initialiseAndroidApp() {
   if (!Capacitor.isNativePlatform()) return () => undefined
   const urlListener = await CapacitorApp.addListener('appUrlOpen', ({ url }) => openAppUrl(url))
@@ -30,7 +35,7 @@ export async function initialiseAndroidApp() {
     await PushNotifications.addListener('registration', ({ value }) => { void registerPushDevice(value, 'android') })
     await PushNotifications.addListener('registrationError', () => undefined)
     await PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
-      const target = typeof notification.data?.target_path === 'string' ? notification.data.target_path : '/customer/notifications'
+      const target = safeTargetPath(notification.data?.target_path)
       window.history.pushState({}, '', target)
       window.dispatchEvent(new PopStateEvent('popstate'))
     })
