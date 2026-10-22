@@ -4,8 +4,9 @@ import { GoogleSignIn } from '@capawesome/capacitor-google-sign-in'
 import type { BookingDraft, Role, Service, ServiceCategory } from '../types'
 import { prepareBookingPhoto, sha256Hex } from './booking-images'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() || 'https://ojivulfurjjsskqzghfb.supabase.co'
+// This is a public Supabase client key, not a service-role secret. It is safe to ship in the app.
+const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || 'sb_publishable_zYyhEvpbzJP5CX1Gb_Dd8w_3pixdzrI'
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('your-project'))
 
@@ -232,6 +233,9 @@ function authMessage(error: { message?: string }) {
   if (message.includes('invalid login credentials')) return 'البريد الإلكتروني أو كلمة المرور غير صحيحة.'
   if (message.includes('email not confirmed')) return 'لم يكتمل تفعيل البريد الإلكتروني. تحقق من بريدك ثم حاول مجددًا.'
   if (message.includes('provider is not enabled') || message.includes('unsupported provider')) return 'الدخول بحساب Google غير متاح الآن. استخدم البريد الإلكتروني أو حاول لاحقًا.'
+  if (message.includes('developer_error') || message.includes('provider configuration') || message.includes('10:')) return 'إعداد Google للتطبيق غير متطابق مع حزمة Android الحالية. أعد تثبيت آخر APK أو تواصل مع الإدارة.'
+  if (message.includes('no credential') || message.includes('no google account')) return 'لم يجد الهاتف حساب Google متاحًا. أضف الحساب إلى الهاتف ثم حاول مجددًا.'
+  if (message.includes('canceled') || message.includes('cancelled')) return 'أُلغي تسجيل الدخول بحساب Google.'
   if (message.includes('already registered')) return 'هذا البريد مسجل مسبقًا. جرّب تسجيل الدخول.'
   if (message.includes('password should be')) return 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.'
   if (message.includes('rate limit')) return 'تم تجاوز عدد المحاولات. انتظر قليلًا ثم حاول.'
@@ -374,8 +378,7 @@ export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provide
   if (!supabase) throw new Error('تعذر تفعيل الدخول بحساب Google.')
   void role // يُختار الدور بعد نجاح الحساب الجديد من Google.
   if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
-    const clientId = (import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID as string | undefined)?.trim()
-    if (!clientId) throw new Error('لم يتم إعداد معرّف Google Web للتطبيق. أضف VITE_GOOGLE_WEB_CLIENT_ID ثم أعد بناء Android.')
+    const clientId = (import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID as string | undefined)?.trim() || '608379006778-ucli23t7tlku02tvs4ei4pr8k2m5gj4b.apps.googleusercontent.com'
     try {
       await GoogleSignIn.initialize({ clientId })
       const result = await GoogleSignIn.signIn()
