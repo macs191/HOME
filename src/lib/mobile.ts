@@ -40,6 +40,15 @@ export async function initialiseAndroidApp() {
 
 export async function requestAndroidNotifications() {
   if (!isAndroidApp()) return
+  await PushNotifications.createChannel({
+    id: 'home-service',
+    name: 'إشعارات HOME SERVICE',
+    description: 'تحديثات الطلبات ووصول الفني والرسائل المهمة',
+    importance: 5,
+    visibility: 1,
+    sound: 'default',
+    vibration: true,
+  }).catch(() => undefined)
   const permission = await PushNotifications.checkPermissions()
   if (permission.receive !== 'granted') {
     const requested = await PushNotifications.requestPermissions()
