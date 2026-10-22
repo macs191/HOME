@@ -1,6 +1,6 @@
 import { createClient, type Session, type User } from '@supabase/supabase-js'
 import { Capacitor } from '@capacitor/core'
-import { GoogleSignIn } from '@capawesome/capacitor-google-sign-in'
+import { Browser } from '@capacitor/browser'
 import type { BookingDraft, Role, Service, ServiceCategory } from '../types'
 import { prepareBookingPhoto, sha256Hex } from './booking-images'
 
@@ -291,6 +291,7 @@ export async function signUpAccount(input: { email: string; password: string; fu
 
 export async function finishOAuthSignIn(): Promise<{ role: Role | null; profileComplete: boolean }> {
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
+  await Browser.close().catch(() => undefined)
   const { data, error } = await supabase.auth.getSession()
   if (error) throw new Error(authMessage(error))
   if (!data.session?.user) throw new Error('تعذر استعادة جلسة Google. أعد المحاولة من صفحة الدخول.')
@@ -378,18 +379,14 @@ export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provide
   if (!supabase) throw new Error('تعذر تفعيل الدخول بحساب Google.')
   void role // يُختار الدور بعد نجاح الحساب الجديد من Google.
   if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
-    const clientId = (import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID as string | undefined)?.trim() || '608379006778-ucli23t7tlku02tvs4ei4pr8k2m5gj4b.apps.googleusercontent.com'
-    try {
-      await GoogleSignIn.initialize({ clientId })
-      const result = await GoogleSignIn.signIn()
-      if (!result.idToken) throw new Error('لم يُرجع Google رمز دخول صالحًا.')
-      const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: result.idToken })
-      if (error) throw error
-      return { flow: 'native' as const }
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('لم يتم إعداد')) throw error
-      throw new Error(authMessage(error as { message?: string }))
-    }
+    const current = await getAuthState()
+    if (current.user) throw new Error('يوجد حساب مفتوح حاليًا. سجّل الخروج أولًا قبل الدخول بحساب آخر.')
+    const callback = new URL('com.home.service://auth/callback')
+    if (nextPath?.startsWith('/') && !nextPath.startsWith('//')) callback.searchParams.set('next', nextPath)
+    const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: callback.toString(), skipBrowserRedirect: true } })
+    if (error || !data?.url) throw new Error(authMessage(error ?? { message: 'تعذر فتح Google.' }))
+    await Browser.open({ url: data.url })
+    return { flow: 'redirect' as const }
   }
   const callback = Capacitor.isNativePlatform() ? new URL('com.home.service://auth/callback') : new URL('/auth/callback', window.location.origin)
   if (nextPath?.startsWith('/') && !nextPath.startsWith('//')) callback.searchParams.set('next', nextPath)

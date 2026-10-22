@@ -235,18 +235,7 @@ export function LoginPage({ fixedRole }: { fixedRole?: MemberRole }) {
   const googleLogin = async () => {
     setError(''); setNotice(''); setBusy(true)
     try {
-      const result = await signInWithGoogle(role, googleNext)
-      if (result.flow === 'native') {
-        const accountRole = await getMyRole()
-        if (!accountRole) { navigate('/auth/complete-profile', { replace: true }); return }
-        if (accountRole === 'provider') await ensureProviderProfile('provider')
-        if (accountRole === 'customer' || accountRole === 'provider') {
-          const profile = await getMyAccountProfile()
-          if (profile.error) throw profile.error
-          if (!profile.data?.full_name?.trim() || !validatePhone(profile.data?.phone ?? '')) { navigate('/auth/complete-profile', { replace: true }); return }
-        }
-        navigate(pathForRole(accountRole, nextPath), { replace: true })
-      }
+      await signInWithGoogle(role, googleNext)
     }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'تعذر بدء الدخول عبر Google.') }
     finally { setBusy(false) }
