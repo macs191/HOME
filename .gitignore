@@ -13,3 +13,6 @@ identity-uploads/
 
 # Supabase CLI cache and local state
 supabase/.temp/
+
+# Firebase service-account files
+*-firebase-adminsdk-*.json
