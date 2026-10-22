@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Banknote, Check, FileText, Printer, X } from 'lucide-react'
 import { ActionConfirmDialog } from './ActionConfirmDialog'
-import { changeInvoicePayment, chooseInvoicePayment, getPlatformSettings, submitTransferReference } from '../lib/supabase'
+import { changeInvoicePayment, chooseInvoicePayment, createCheckoutSession, getPlatformSettings, submitTransferReference } from '../lib/supabase'
 
 type PaymentMethod = 'cash' | 'bank_transfer'
 type Invoice = { id: string; invoice_number: number; amount: number; status: string; payment_method: PaymentMethod | null; receipt_reference?: string | null; review_note?: string | null }
@@ -16,6 +16,8 @@ export function CustomerInvoice({ booking }: { booking: Booking }) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [pendingMethod, setPendingMethod] = useState<PaymentMethod | null>(null)
+  const [checkoutBusy, setCheckoutBusy] = useState(false)
+  const [checkoutError, setCheckoutError] = useState('')
   const inFlight = useRef(false)
   useEffect(() => { getPlatformSettings().then(({ data }) => setSettings(data)).catch(() => undefined) }, [])
   if (!invoice) return booking.status === 'completed' && !booking.price_snapshot ? <div className="invoice-pending"><FileText size={16} /> انتهى العمل؛ السعر قيد مراجعة الإدارة قبل إصدار الفاتورة.</div> : null
@@ -48,6 +50,18 @@ export function CustomerInvoice({ booking }: { booking: Booking }) {
     if (await run(() => action, success)) setPendingMethod(null)
   }
 
+  const startCheckout = async () => {
+    if (checkoutBusy) return
+    setCheckoutBusy(true); setCheckoutError('')
+    try {
+      const result = await createCheckoutSession(invoice.id)
+      window.location.assign(result.url)
+    } catch (error) {
+      setCheckoutError(error instanceof Error ? error.message : 'تعذر فتح بوابة الدفع.')
+    } finally { setCheckoutBusy(false) }
+  }
+  const qrTarget = `${window.location.origin}/customer/orders?payment=${encodeURIComponent(invoice.id)}`
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrTarget)}`
   const requestMethodChange = (method: PaymentMethod) => {
     if (busy || method === invoice.payment_method) return
     setMessage('')
@@ -62,6 +76,7 @@ export function CustomerInvoice({ booking }: { booking: Booking }) {
     <div className="invoice-head"><span><FileText size={17} /> فاتورة رقم {invoice.invoice_number}</span><strong>{Number(invoice.amount).toFixed(2)} ر.س</strong></div>
     {invoice.status === 'paid' ? <div className="invoice-status paid"><Check size={15} /> مدفوعة ومؤكدة</div> : <>
       {!invoice.payment_method && <div className="invoice-methods"><p>اختر طريقة الدفع بعد مراجعة تفاصيل الفاتورة:</p><div><button type="button" className="button button-secondary button-small" disabled={busy} onClick={() => requestMethodChange('cash')}><Banknote size={15} /> نقدًا</button><button type="button" className="button button-secondary button-small" disabled={busy} onClick={() => requestMethodChange('bank_transfer')}>تحويل بنكي</button></div></div>}
+      {invoice.status !== 'paid' && <div className="invoice-online-payment"><strong>الدفع الإلكتروني</strong><p className="muted">ادفع الآن عبر البوابة الآمنة، أو امسح الرمز من هاتف آخر لفتح صفحة الدفع.</p><div className="invoice-qr-row"><img src={qrUrl} alt="رمز QR لصفحة دفع الفاتورة" width={120} height={120} loading="lazy" /><div><button type="button" className="button button-primary button-small" disabled={busy || checkoutBusy} onClick={() => void startCheckout()}>{checkoutBusy ? 'جارٍ فتح الدفع…' : 'الدفع بالبطاقة'}</button><small className="muted">لا تُدخل بيانات البطاقة داخل HOME؛ ستفتح صفحة Stripe الآمنة.</small></div></div>{checkoutError && <div className="inline-error"><X size={15} />{checkoutError}</div>}</div>}
       {invoice.payment_method === 'cash' && invoice.status !== 'paid' && <div className="invoice-status"><Banknote size={15} /> الدفع نقدًا؛ تسجل الإدارة التحصيل بعد استلام المبلغ.<button type="button" className="text-link" disabled={busy} onClick={() => requestMethodChange('bank_transfer')}>تغيير إلى تحويل بنكي</button></div>}
       {invoice.payment_method === 'bank_transfer' && invoice.status !== 'paid' && <div className="transfer-details"><button type="button" className="text-link" disabled={busy} onClick={() => requestMethodChange('cash')}>رجوع واختيار الدفع النقدي</button><strong>بيانات التحويل البنكي</strong>{settings?.bank_name && <span>البنك: {settings.bank_name}</span>}{settings?.bank_account_name && <span>اسم المستفيد: {settings.bank_account_name}</span>}{settings?.iban && <code dir="ltr">IBAN: {settings.iban}</code>}{!settings?.iban && <span className="muted">لم تضف الإدارة بيانات التحويل بعد.</span>}{invoice.status === 'pending' ? <div className="invoice-status"><Check size={15} /> استلمنا مرجع التحويل، والفاتورة بانتظار مراجعة الإدارة.</div> : <form onSubmit={(event) => { event.preventDefault(); void run(() => submitTransferReference(invoice.id, reference), 'أُرسل مرجع التحويل للمراجعة.') }}><label className="field-label">رقم العملية أو مرجع التحويل<input value={reference} onChange={(event) => setReference(event.target.value)} minLength={3} maxLength={120} required placeholder="أدخل مرجع التحويل" /></label><button className="button button-primary button-small" disabled={busy || !settings?.iban || reference.trim().length < 3}>{busy ? 'جارٍ الإرسال…' : 'إرسال للمراجعة'}</button></form>}</div>}
       {invoice.status === 'failed' && invoice.review_note && <div className="inline-error"><X size={15} />{invoice.review_note}</div>}

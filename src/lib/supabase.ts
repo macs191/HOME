@@ -838,6 +838,12 @@ export async function changeInvoicePayment(paymentId: string, method: 'cash' | '
   return data
 }
 
+export async function createCheckoutSession(paymentId: string) {
+  if (!supabase) throw new Error('خدمة الدفع غير متاحة الآن.')
+  const { data, error } = await supabase.functions.invoke('create-checkout-session', { body: { payment_id: paymentId } })
+  if (error || !data?.url) throw new Error(data?.message || 'بوابة الدفع الإلكتروني غير مهيأة حاليًا.')
+  return data as { url: string; session_id?: string }
+}
 export async function submitTransferReference(paymentId: string, reference: string) {
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
   const { data, error } = await supabase.rpc('customer_submit_transfer_reference_safe', { p_payment_id: paymentId, p_reference: reference })

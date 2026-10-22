@@ -17,7 +17,7 @@ import { CustomerBookingActions } from './components/CustomerBookingActions'
 import { ProviderJobCard } from './components/ProviderJobCard'
 import { AdminMarketplacePanel } from './components/AdminMarketplacePanel'
 import { AdminWorkspace } from './components/AdminWorkspace'
-import { ProviderProductOrdersPanel, StorePage, StoreOrdersPanel } from './components/StorePage'
+import { StorePage, StoreOrdersPanel } from './components/StorePage'
 import { VoiceAssistant } from './components/VoiceAssistant'
 import { UnifiedOrdersCenter } from './components/UnifiedOrdersCenter'
 import { DownloadPage } from './components/DownloadPage'
@@ -338,11 +338,11 @@ function ProviderPage() {
   const providerStatus = providerProfile.approval_status === 'approved' ? 'الحساب معتمد' : providerProfile.approval_status === 'rejected' ? 'يلزم تحديث البيانات' : 'قيد مراجعة الإدارة'
   return <DashboardLayout role="provider" eyebrow="لوحة الفني" title="طلباتك أولًا" description="تابع الطلبات المسندة، حدّث حالتها، وأضف ملاحظاتك من مكان واحد.">
     <div className="dashboard-grid provider-dashboard-clean"><div className="dashboard-main">
-      {providerSection === 'overview' && <><ProviderProductOrdersPanel /><UnifiedOrdersCenter role="provider" items={queue} loading={false} error={workMessage} onRefresh={() => void refreshProviderData()}><></></UnifiedOrdersCenter>
+      {providerSection === 'overview' && <><UnifiedOrdersCenter role="provider" items={queue} loading={false} error={workMessage} onRefresh={() => void refreshProviderData()}><></></UnifiedOrdersCenter>
         <div className="provider-kpi-grid"><div className="metric-card"><span className="muted">طلبات حالية</span><strong>{queue.length}</strong></div><div className="metric-card"><span className="muted">الرصيد الحالي</span><strong>{total.toFixed(2)} ر.س</strong></div></div>
         <section className="panel provider-home-queue"><div className="panel-heading"><div><span className="eyebrow">تشغيل اليوم</span><h2>الطلبات المسندة</h2></div><Link className="text-link" to="/provider/work-queue">عرض الكل <ArrowLeft size={15} /></Link></div>{queue.length ? <div className="booking-list">{queue.slice(0, 3).map((item) => <ProviderJobCard key={item.id} item={item} onUpdate={refreshProviderData} onMessage={setWorkMessage} />)}</div> : <EmptyState icon={MessageCircle} title="لا توجد طلبات مسندة" body="ستظهر الطلبات هنا عند إسنادها إليك." />}</section>
       </>}
-      {providerSection === 'work-queue' && <><ProviderProductOrdersPanel /><UnifiedOrdersCenter role="provider" items={queue} loading={false} error={workMessage} onRefresh={() => void refreshProviderData()}><></></UnifiedOrdersCenter><div className="panel" id="work-queue"><SectionTitle title="الطلبات" action={<StatusPill>{queue.length} طلبات</StatusPill>} />{workMessage && <div className={workMessage.startsWith('تعذر') ? 'inline-error' : 'success-note'}>{workMessage}</div>}{queue.length ? <div className="booking-list">{queue.map((item) => <ProviderJobCard key={item.id} item={item} onUpdate={refreshProviderData} onMessage={setWorkMessage} />)}</div> : <EmptyState icon={MessageCircle} title="لا توجد طلبات مسندة" body="ستظهر الطلبات هنا عند إسنادها إليك." />}</div></>}
+      {providerSection === 'work-queue' && <><UnifiedOrdersCenter role="provider" items={queue} loading={false} error={workMessage} onRefresh={() => void refreshProviderData()}><></></UnifiedOrdersCenter><div className="panel" id="work-queue"><SectionTitle title="الطلبات" action={<StatusPill>{queue.length} طلبات</StatusPill>} />{workMessage && <div className={workMessage.startsWith('تعذر') ? 'inline-error' : 'success-note'}>{workMessage}</div>}{queue.length ? <div className="booking-list">{queue.map((item) => <ProviderJobCard key={item.id} item={item} onUpdate={refreshProviderData} onMessage={setWorkMessage} />)}</div> : <EmptyState icon={MessageCircle} title="لا توجد طلبات مسندة" body="ستظهر الطلبات هنا عند إسنادها إليك." />}</div></>}
       {providerSection === 'schedule' && <ProviderSchedulePanel />}
       {providerSection === 'settings' && <AccountSettingsPanel role="provider" />}
       {providerSection === 'notifications' && <NotificationsPanel />}
