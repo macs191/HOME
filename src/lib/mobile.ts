@@ -52,7 +52,7 @@ export async function initialiseAndroidApp() {
 export async function requestAndroidNotifications() {
   if (!isAndroidApp()) return
   await PushNotifications.createChannel({
-    id: 'home-service-incoming',
+    id: 'home-service-incoming-v2',
     name: 'إشعارات HOME SERVICE',
     description: 'تحديثات الطلبات ووصول الفني والرسائل المهمة',
     importance: 5,
