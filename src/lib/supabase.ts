@@ -382,7 +382,7 @@ export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provide
       if (!result.idToken) throw new Error('لم يُرجع Google رمز دخول صالحًا.')
       const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: result.idToken })
       if (error) throw error
-      return
+      return { flow: 'native' as const }
     } catch (error) {
       if (error instanceof Error && error.message.includes('لم يتم إعداد')) throw error
       throw new Error(authMessage(error as { message?: string }))
@@ -392,6 +392,7 @@ export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provide
   if (nextPath?.startsWith('/') && !nextPath.startsWith('//')) callback.searchParams.set('next', nextPath)
   const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: callback.toString() } })
   if (error) throw new Error(authMessage(error))
+  return { flow: 'redirect' as const }
 }
 
 export async function getMyNotifications() {

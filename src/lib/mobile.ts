@@ -11,7 +11,8 @@ function openAppUrl(url: string) {
   try {
     const parsed = new URL(url)
     if (parsed.protocol === 'com.home.service:') {
-      window.history.replaceState({}, '', `${parsed.pathname}${parsed.search}${parsed.hash}`)
+      const callbackPath = parsed.host === 'auth' ? '/auth/callback' : (parsed.pathname || '/')
+      window.history.replaceState({}, '', `${callbackPath}${parsed.search}${parsed.hash}`)
       window.dispatchEvent(new PopStateEvent('popstate'))
     }
   } catch { /* تجاهل الروابط غير الصالحة */ }

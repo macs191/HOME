@@ -59,6 +59,7 @@ function App() {
   useEffect(() => {
     let cleanup: (() => void) | undefined
     void initialiseAndroidApp().then((remove) => { cleanup = remove })
+    if ('Notification' in window && Notification.permission === 'default') void Notification.requestPermission().catch(() => undefined)
     void getAuthState().then((auth) => { if (auth.user) void requestAndroidNotifications() }).catch(() => undefined)
     const authSubscription = onAuthStateChange((next) => { if (next.user) void requestAndroidNotifications() })
     return () => { cleanup?.(); authSubscription.unsubscribe() }
@@ -93,9 +94,10 @@ function EmptyState({ icon: Icon = Layers3, title, body, action }: { icon?: Luci
 
 function RequestAuthDialog({ open, onClose, role = 'customer', nextPath = '/book' }: { open: boolean; onClose: () => void; role?: 'customer' | 'provider'; nextPath?: string }) {
   const [googleError, setGoogleError] = useState('')
+  const navigate = useNavigate()
   if (!open) return null
   const target = role === 'provider' ? '/provider' : (safeNextPath(nextPath) ?? '/book')
-  const goGoogle = async () => { setGoogleError(''); try { await signInWithGoogle(role, target) } catch (error) { setGoogleError(error instanceof Error ? error.message : 'تعذر بدء الدخول عبر Google') } }
+  const goGoogle = async () => { setGoogleError(''); try { const result = await signInWithGoogle(role, target); if (result.flow === 'native') { const accountRole = await getMyRole(); onClose(); navigate(accountRole ? (accountRole === 'admin' || accountRole === 'sub_admin' ? '/admin/overview' : accountRole === 'provider' ? '/provider/overview' : target) : `/auth/complete-profile?next=${encodeURIComponent(target)}`, { replace: true }) } } catch (error) { setGoogleError(error instanceof Error ? error.message : 'تعذر بدء الدخول عبر Google') } }
   return <div className="royal-modal-backdrop" role="dialog" aria-modal="true"><div className="royal-modal"><button className="modal-close" onClick={onClose} aria-label="إغلاق"><X size={18} /></button><span className="royal-seal">✦</span><span className="eyebrow">خطوة آمنة قبل الطلب</span><h2>ابدأ طلبك بحسابك</h2><p>أنشئ حساب طالب خدمة أو سجّل الدخول لمتابعة الطلب والدفع بعد إكمال العمل.</p>{googleError && <div className="inline-error"><X size={16} />{googleError}</div>}<button className="button google-button button-wide" onClick={goGoogle}><span className="google-g">G</span>المتابعة بحساب Google</button><Link className="button button-primary button-wide" to={role === 'provider' ? '/provider/login' : `/customer/login?next=${encodeURIComponent(target)}`} onClick={onClose}>تسجيل الدخول أو إنشاء حساب <ArrowLeft size={16} /></Link><button className="modal-secondary" onClick={onClose}>سأعود لاحقًا</button></div></div>
 }
 

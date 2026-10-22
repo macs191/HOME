@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Bell, BellRing, Check, Volume2, VolumeX } from 'lucide-react'
+import { Bell, BellRing, Check } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { getMyNotifications, markNotificationRead, type AppNotification } from '../lib/supabase'
 
-const SOUND_KEY = 'homefix-notification-sound'
 export function playNotificationChime() {
-  try { if (localStorage.getItem(SOUND_KEY) !== 'on') return } catch { return }
   try {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
     if (!AudioContextClass) return
@@ -30,7 +28,6 @@ export function NotificationsPanel() {
   const [items, setItems] = useState<AppNotification[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [sound, setSound] = useState(() => { try { return localStorage.getItem(SOUND_KEY) === 'on' } catch { return false } })
   const [permission, setPermission] = useState<NotificationPermission>(() => 'Notification' in window ? Notification.permission : 'denied')
 
   const refresh = async () => {
@@ -54,12 +51,6 @@ export function NotificationsPanel() {
     if (!('Notification' in window)) { setError('هذا المتصفح لا يدعم إشعارات النظام؛ ستظل التنبيهات ظاهرة داخل التطبيق.'); return }
     setPermission(await Notification.requestPermission())
   }
-  const toggleSound = async () => {
-    const next = !sound
-    try { localStorage.setItem(SOUND_KEY, next ? 'on' : 'off') } catch { /* الإعداد اختياري */ }
-    setSound(next)
-    if (next) playNotificationChime()
-  }
   const markRead = async (item: AppNotification) => {
     if (item.is_read) return
     try { await markNotificationRead(item.id); setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, is_read: true } : entry)) }
@@ -70,7 +61,7 @@ export function NotificationsPanel() {
     <div className="panel-heading"><div><span className="eyebrow">تنبيهات حسابك</span><h2>الإشعارات</h2><p className="muted">تحديثات الطلبات والاعتماد والفواتير تظهر هنا فور وصولها.</p></div><span className="status-pill">{items.filter((item) => !item.is_read).length} غير مقروءة</span></div>
     <div className="notification-preferences">
       <button type="button" className="button button-secondary button-small" onClick={() => void enableNotifications()} disabled={permission === 'granted'}><BellRing size={15} />{permission === 'granted' ? 'إشعارات النظام مفعّلة' : 'تفعيل إشعارات الهاتف'}</button>
-      <button type="button" className="button button-secondary button-small" onClick={() => void toggleSound()}>{sound ? <Volume2 size={15} /> : <VolumeX size={15} />}{sound ? 'الصوت مفعّل' : 'تفعيل صوت التنبيه'}</button>
+      <span className="status-pill">صوت التنبيه نشط</span>
     </div>
     {error && <div role="alert" className="inline-error">{error}<button type="button" onClick={() => void refresh()}>إعادة المحاولة</button></div>}
     {loading ? <div className="loading-state">جارٍ تحميل الإشعارات…</div> : items.length ? <div className="notification-list">{items.map((item) => {
