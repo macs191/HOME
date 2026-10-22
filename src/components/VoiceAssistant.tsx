@@ -12,6 +12,8 @@ type AssistantDraft = {
   address: string
   urgency: 'normal' | 'urgent'
   locationSource: 'none' | 'manual'
+  scheduledDate: string
+  scheduledSlot: string
 }
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
 
@@ -48,6 +50,23 @@ function cityFromText(text: string): string {
   return found === 'مكة' ? 'مكة المكرمة' : found ?? ''
 }
 
+function scheduleFromText(text: string): { scheduledDate: string; scheduledSlot: string } | undefined {
+  const now = new Date()
+  const date = new Date(now)
+  if (/غدًا|غدا|بكرة|بكره/.test(text)) date.setDate(now.getDate() + 1)
+  else if (!/اليوم/.test(text)) {
+    const iso = text.match(/(20\d{2})[-\/](\d{1,2})[-\/](\d{1,2})/)
+    if (!iso) return undefined
+    date.setFullYear(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]))
+  }
+  const scheduledSlot = /صباح|الصبح/.test(text) ? '09:00-12:00' : /ظهر|الظهر|ظهرًا/.test(text) ? '12:00-15:00' : /عصر|العصر/.test(text) ? '16:00-19:00' : /مساء|المساء|ليل/.test(text) ? '19:00-21:00' : ''
+  if (!scheduledSlot) return undefined
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return { scheduledDate: `${yyyy}-${mm}-${dd}`, scheduledSlot }
+}
+
 export function VoiceAssistant() {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
@@ -59,9 +78,13 @@ export function VoiceAssistant() {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Message[]>([{ from: 'assistant', text: 'أهلًا بك. اذكر الخدمة المنزلية التي تحتاجها، مثل السباكة أو الكهرباء، وسأجهّز مسودة طلب تراجعها قبل الإرسال.' }])
   const recognition = useRef<any>(null)
-  const [step, setStep] = useState<'service' | 'issue' | 'location' | 'ready'>('service')
+  const draftRef = useRef<AssistantDraft | null>(null)
+  const [step, setStep] = useState<'service' | 'issue' | 'location' | 'schedule' | 'ready'>('service')
   const [serviceId, setServiceId] = useState<string>()
   const [issue, setIssue] = useState('')
+  const [city, setCity] = useState('')
+  const [district, setDistrict] = useState('')
+  const [address, setAddress] = useState('')
   const say = (text: string) => {
     if (!('speechSynthesis' in window)) return
     window.speechSynthesis.cancel()
@@ -96,20 +119,27 @@ export function VoiceAssistant() {
         reply = 'ما المدينة والحي أو العنوان التقريبي؟ سيُملأ العنوان في المسودة لتراجعه، ويمكنك اختيار موقع GPS من نموذج الطلب.'
       } else if (step === 'location') {
         const district = text.match(/(?:حي|الحى)\s+([^،,]+)/)?.[1]?.trim().slice(0, 160) ?? ''
-        nextDraft = {
-          serviceId,
-          issue,
-          city: cityFromText(text),
-          district,
-          address: text.slice(0, 500),
-          urgency: /عاجل|طارئ|بسرعة/.test(issue) ? 'urgent' : 'normal',
-          locationSource: 'manual',
-        }
-        setStep('ready')
+        setCity(cityFromText(text))
+        setDistrict(district)
+        setAddress(text.slice(0, 500))
+        setStep('schedule')
         setPendingAIText('')
-        reply = 'جهزت مسودة الطلب. راجع الخدمة والوصف والعنوان والموعد في النموذج، ولن يُرسل الطلب قبل أن تؤكد بنفسك.'
+        reply = 'ممتاز. متى يناسبك الموعد؟ قل مثلًا: غدًا صباحًا، أو 2026-10-25 مساءً.'
+      } else if (step === 'schedule') {
+        const schedule = scheduleFromText(text)
+        if (!schedule) {
+          reply = 'أحتاج اليوم والفترة الزمنية. قل مثلًا: غدًا صباحًا، أو اليوم مساءً.'
+        } else {
+          const draft: AssistantDraft = { serviceId, issue, city, district, address, urgency: /عاجل|طارئ|بسرعة/.test(issue) ? 'urgent' : 'normal', locationSource: 'manual', ...schedule }
+          draftRef.current = draft
+          setStep('ready')
+          reply = 'راجعت البيانات صوتيًا. قل «أرسل الطلب» أو «ارفع الطلب» للتأكيد النهائي، أو قل «عدّل» للمراجعة.'
+        }
       } else {
-        reply = 'المسودة جاهزة للمراجعة. يمكنك تعديل بياناتها في نموذج الطلب؛ لن أنفّذ الإرسال نيابةً عنك.'
+        if (/أرسل|ارفع|تأكيد|نفّذ|ارفعه/.test(text)) {
+          nextDraft = draftRef.current ?? undefined
+          reply = 'تم تسجيل تأكيدك الصوتي. سأفتح نموذج الحجز بالبيانات التي جمعتها، ولا يتم الإرسال إلا بعد التحقق من الحساب والموافقة على سياسة الطلب.'
+        } else reply = 'المسودة جاهزة. قل «أرسل الطلب» للتأكيد النهائي أو «عدّل» للمراجعة.'
       }
     } finally {
       processingRef.current = false
@@ -118,7 +148,7 @@ export function VoiceAssistant() {
 
     setMessages((items) => [...items, { from: 'user', text }, { from: 'assistant', text: reply }])
     say(reply)
-    if (nextDraft) setTimeout(() => navigate('/book', { state: { assistantDraft: nextDraft } }), 700)
+    if (nextDraft) setTimeout(() => navigate('/book', { state: { assistantDraft: nextDraft, assistantConfirmed: true } }), 700)
   }
 
   const classifyWithAI = async () => {
@@ -183,7 +213,7 @@ export function VoiceAssistant() {
       {pendingAIText && <div className="voice-assistant-ai-consent" role="group" aria-label="الموافقة على تصنيف العبارة"><p>سيُرسل النص المعروض أعلاه إلى OpenAI لتصنيف الخدمة فقط. لا توافق إذا احتوى على اسم أو عنوان أو رقم أو أي معلومة شخصية؛ لا تضمن الفلاتر اكتشاف كل ذلك.</p><div className="button-row"><button type="button" className="button button-primary button-small" onClick={() => void classifyWithAI()} disabled={processing}>أوافق، صَنّف الخدمة</button><button type="button" className="button button-secondary button-small" onClick={cancelAI} disabled={processing}>لا، ألغِ</button></div></div>}
       <div className="voice-assistant-actions"><button className={listening ? 'button button-secondary listening' : 'button button-primary'} onClick={() => listening ? recognition.current?.stop() : startListening()} disabled={processing}>{listening ? <MicOff size={16} /> : <Mic size={16} />} {listening ? 'إيقاف الاستماع' : 'تحدث الآن'}</button><button className="button button-secondary" onClick={() => { openRef.current = false; setOpen(false); recognition.current?.stop(); navigate('/book') }}><MapPin size={16} /> فتح نموذج الطلب</button></div>
       <form className="voice-assistant-input" onSubmit={(event) => { event.preventDefault(); void respond(input); setInput('') }}><input value={input} onChange={(event) => setInput(event.target.value)} placeholder="اكتب رسالتك هنا…" disabled={processing} /><button type="submit" aria-label="إرسال" disabled={processing || !input.trim()}><Send size={16} /></button></form>
-      <small className="voice-assistant-note">المساعد يجهّز مسودة فقط؛ راجع المعلومات وأرسل الطلب بنفسك.</small>
+      <small className="voice-assistant-note">المساعد يجمع المسودة صوتيًا؛ لا يُرسل الطلب إلا بعد قولك «أرسل الطلب» وبعد التحقق من الحساب والحقول الإلزامية.</small>
       <small className="voice-assistant-note">عند تعذر التصنيف المحلي، لا تُرسل العبارة تلقائيًا. بعد موافقتك فقط قد تُرسل عبارة الخدمة نفسها إلى OpenAI؛ لا ترسل معها معلومات شخصية. وصف المشكلة والموقع اللذان تجمعهما الخطوات اللاحقة لا يُرسلان إلى OpenAI.</small>
     </section>}
   </>
