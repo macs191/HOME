@@ -65,7 +65,30 @@ function App() {
     const authSubscription = onAuthStateChange((next) => { if (next.user) void requestAndroidNotifications() })
     return () => { cleanup?.(); authSubscription.unsubscribe() }
   }, [])
-  return <Shell theme={theme} onThemeChange={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><NotificationMonitor /><Routes><Route path="/" element={<HomePage />} /><Route path="/services" element={<ServicesPage />} /> <Route path="/about" element={<AboutPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/downloads" element={<DownloadPage />} /><Route path="/store" element={<StorePage />} /><Route path="/book" element={<BookingPage />} /><Route path="/customer/:section?" element={<ProtectedRoute requiredRole="customer"><CustomerPage /></ProtectedRoute>} /><Route path="/provider/:section?" element={<ProtectedRoute requiredRole="provider"><ProviderPage /></ProtectedRoute>} /><Route path="/admin/:section?" element={<ProtectedRoute requiredRole="admin"><AdminPage /></ProtectedRoute>} /><Route path="/login" element={<LoginPage />} /><Route path="/customer/login" element={<LoginPage fixedRole="customer" />} /><Route path="/provider/login" element={<LoginPage fixedRole="provider" />} /><Route path="/auth/callback" element={<OAuthCallbackPage />} /><Route path="/auth/complete-profile" element={<GoogleProfileCompletionPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></Shell>
+  return <Shell theme={theme} onThemeChange={() => setTheme((value) => value === 'light' ? 'dark' : 'light')}><NotificationMonitor /><Routes><Route path="/" element={<SessionEntryRoute />} /><Route path="/services" element={<ServicesPage />} /> <Route path="/about" element={<AboutPage />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="/downloads" element={<DownloadPage />} /><Route path="/store" element={<StorePage />} /><Route path="/book" element={<BookingPage />} /><Route path="/customer/:section?" element={<ProtectedRoute requiredRole="customer"><CustomerPage /></ProtectedRoute>} /><Route path="/provider/:section?" element={<ProtectedRoute requiredRole="provider"><ProviderPage /></ProtectedRoute>} /><Route path="/admin/:section?" element={<ProtectedRoute requiredRole="admin"><AdminPage /></ProtectedRoute>} /><Route path="/login" element={<LoginPage />} /><Route path="/customer/login" element={<LoginPage fixedRole="customer" />} /><Route path="/provider/login" element={<LoginPage fixedRole="provider" />} /><Route path="/auth/callback" element={<OAuthCallbackPage />} /><Route path="/auth/complete-profile" element={<GoogleProfileCompletionPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Routes></Shell>
+}
+
+function SessionEntryRoute() {
+  const [state, setState] = useState<'checking' | 'guest' | 'profile' | Role>('checking')
+  useEffect(() => {
+    let active = true
+    const resolve = async () => {
+      try {
+        const auth = await getAuthState()
+        if (!auth.user) { if (active) setState('guest'); return }
+        const role = await getMyRole()
+        if (active) setState(role ?? 'profile')
+      } catch {
+        if (active) setState('guest')
+      }
+    }
+    void resolve()
+    return () => { active = false }
+  }, [])
+  if (state === 'checking') return <div className="container loading-state">جارٍ فتح لوحة حسابك…</div>
+  if (state === 'guest') return <HomePage />
+  if (state === 'profile') return <Navigate to="/auth/complete-profile" replace />
+  return <Navigate to={dashboardPath(state)} replace />
 }
 
 function useCatalog() {
