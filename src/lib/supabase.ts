@@ -386,7 +386,9 @@ export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provide
   if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
     const current = await getAuthState()
     if (current.user) throw new Error('يوجد حساب مفتوح حاليًا. سجّل الخروج أولًا قبل الدخول بحساب آخر.')
-    const clientId = (import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID as string | undefined)?.trim() || '608379006778-ucli23t7tlku02tvs4ei4pr8k2m5gj4b.apps.googleusercontent.com'
+    // This is the Web OAuth client, not the Android client from google-services.json.
+    // Supabase Auth validates the ID-token audience against this exact client ID.
+    const clientId = '608379006778-ucli23t7tlku02tvs4ei4pr8k2m5gj4b.apps.googleusercontent.com'
     try {
       await GoogleSignIn.initialize({ clientId })
       const result = await GoogleSignIn.signIn()
