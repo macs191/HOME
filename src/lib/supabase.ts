@@ -234,13 +234,16 @@ function authMessage(error: { message?: string }) {
   if (message.includes('invalid login credentials')) return 'البريد الإلكتروني أو كلمة المرور غير صحيحة.'
   if (message.includes('email not confirmed')) return 'لم يكتمل تفعيل البريد الإلكتروني. تحقق من بريدك ثم حاول مجددًا.'
   if (message.includes('provider is not enabled') || message.includes('unsupported provider')) return 'الدخول بحساب Google غير متاح الآن. استخدم البريد الإلكتروني أو حاول لاحقًا.'
-  if (message.includes('developer_error') || message.includes('provider configuration') || message.includes('10:')) return 'إعداد Google للتطبيق غير متطابق مع حزمة Android الحالية. أعد تثبيت آخر APK أو تواصل مع الإدارة.'
+  if (message.includes('developer_error') || message.includes('provider configuration') || message.includes('provider_configuration_error') || message.includes('10:') || message === '10' || message.includes('12500')) return 'إعداد Google للتطبيق غير متطابق مع حزمة Android الحالية. احذف النسخة القديمة وثبّت آخر APK الموقّع، ثم جرّب مجددًا.'
+  if (message.includes('invalid jwt') || message.includes('invalid claim') || message.includes('invalid audience') || message.includes('audience')) return 'وصل رمز Google، لكن Supabase رفضه. يلزم مطابقة Web Client ID في إعداد Google داخل Supabase مع التطبيق.'
   if (message.includes('no credential') || message.includes('no google account')) return 'لم يجد الهاتف حساب Google متاحًا. أضف الحساب إلى الهاتف ثم حاول مجددًا.'
-  if (message.includes('canceled') || message.includes('cancelled')) return 'أُلغي تسجيل الدخول بحساب Google.'
+  if (message.includes('canceled') || message.includes('cancelled') || message.includes('12501') || message.includes('sign_in_canceled')) return 'أُلغي تسجيل الدخول بحساب Google.'
+  if (message.includes('12502') || message.includes('sign_in_currently_in_progress')) return 'يوجد تسجيل دخول Google آخر قيد التنفيذ. أغلق الحوار وانتظر ثم حاول مرة واحدة.'
   if (message.includes('already registered')) return 'هذا البريد مسجل مسبقًا. جرّب تسجيل الدخول.'
   if (message.includes('password should be')) return 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.'
   if (message.includes('rate limit')) return 'تم تجاوز عدد المحاولات. انتظر قليلًا ثم حاول.'
-  return 'تعذر إتمام تسجيل الدخول. تحقق من بياناتك وحاول مرة أخرى.'
+  const detail = error.message?.trim()
+  return detail ? `تعذر إتمام تسجيل الدخول: ${detail}` : 'تعذر إتمام تسجيل الدخول. تحقق من بياناتك وحاول مرة أخرى.'
 }
 
 export async function getAuthState(): Promise<AuthState> {
