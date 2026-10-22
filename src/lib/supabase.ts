@@ -1,5 +1,6 @@
 import { createClient, type Session, type User } from '@supabase/supabase-js'
 import { Capacitor } from '@capacitor/core'
+import { GoogleSignIn } from '@capawesome/capacitor-google-sign-in'
 import type { BookingDraft, Role, Service, ServiceCategory } from '../types'
 import { prepareBookingPhoto, sha256Hex } from './booking-images'
 
@@ -371,7 +372,22 @@ export async function getMyBookings() {
 
 export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provider'> = 'customer', nextPath?: string) {
   if (!supabase) throw new Error('تعذر تفعيل الدخول بحساب Google.')
-  void role // يُختار الدور بعد عودة الحساب الجديد من Google.
+  void role // يُختار الدور بعد نجاح الحساب الجديد من Google.
+  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+    const clientId = (import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID as string | undefined)?.trim()
+    if (!clientId) throw new Error('لم يتم إعداد معرّف Google Web للتطبيق. أضف VITE_GOOGLE_WEB_CLIENT_ID ثم أعد بناء Android.')
+    try {
+      await GoogleSignIn.initialize({ clientId })
+      const result = await GoogleSignIn.signIn()
+      if (!result.idToken) throw new Error('لم يُرجع Google رمز دخول صالحًا.')
+      const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: result.idToken })
+      if (error) throw error
+      return
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('لم يتم إعداد')) throw error
+      throw new Error(authMessage(error as { message?: string }))
+    }
+  }
   const callback = Capacitor.isNativePlatform() ? new URL('com.home.service://auth/callback') : new URL('/auth/callback', window.location.origin)
   if (nextPath?.startsWith('/') && !nextPath.startsWith('//')) callback.searchParams.set('next', nextPath)
   const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: callback.toString() } })
@@ -453,7 +469,7 @@ function providerDocumentExtension(file: File) {
   return providerDocumentExtensionByMime[providerDocumentMime(file)] ?? ''
 }
 
-export async function submitProviderOnboarding(input: { fullName: string; yearsExperience: number; serviceDescription: string; phone: string; city: string; baseLatitude: number; baseLongitude: number; serviceIds: string[]; identityFront: File; identityBack: File; certificate: File; cv?: File | null }) {
+export async function submitProviderOnboarding(input: { fullName: string; yearsExperience: number; serviceDescription: string; phone: string; city: string; baseLatitude: number; baseLongitude: number; serviceIds: string[]; identityFront: File; identityBack: File; certificate?: File | null; cv?: File | null }) {
   if (!supabase) throw new Error('تعذر إرسال الملف الآن.')
   const userId = (await supabase.auth.getUser()).data.user?.id
   if (!userId) throw new Error('سجّل الدخول لإكمال ملفك المهني.')
@@ -464,9 +480,7 @@ export async function submitProviderOnboarding(input: { fullName: string; yearsE
     if (!['image/jpeg', 'image/png'].includes(providerDocumentMime(file))) throw new Error(`ارفع ${label} بصيغة JPG أو PNG؛ النوع المستلم: ${file.type || 'غير محدد'}.`)
   }
   const certificateTypes = ['image/jpeg', 'image/png', 'application/pdf']
-  if (!input.certificate || input.certificate.size === 0 || input.certificate.size > 5 * 1024 * 1024 || !certificateTypes.includes(providerDocumentMime(input.certificate))) {
-    throw new Error('الشهادة المهنية مطلوبة بصيغة JPG أو PNG أو PDF وبحجم لا يتجاوز 5 ميجابايت.')
-  }
+  if (input.certificate && (input.certificate.size === 0 || input.certificate.size > 5 * 1024 * 1024 || !certificateTypes.includes(providerDocumentMime(input.certificate)))) throw new Error('الشهادة المهنية اختيارية؛ إذا أرفقتها فلتكن JPG أو PNG أو PDF وبحجم لا يتجاوز 5 ميجابايت.')
   const cvTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
   if (input.cv && (input.cv.size === 0 || input.cv.size > 10 * 1024 * 1024 || !cvTypes.includes(providerDocumentMime(input.cv)))) {
     throw new Error('السيرة الذاتية اختيارية؛ إذا أرفقتها فلتكن PDF أو DOC أو DOCX وبحجم لا يتجاوز 10 ميجابايت.')
@@ -486,8 +500,8 @@ export async function submitProviderOnboarding(input: { fullName: string; yearsE
     uploaded.push({ bucket: 'identity-documents', path: front })
     const back = await upload('identity-documents', input.identityBack, 'identity-back')
     uploaded.push({ bucket: 'identity-documents', path: back })
-    const certificate = await upload('identity-documents', input.certificate, 'certificate')
-    uploaded.push({ bucket: 'identity-documents', path: certificate })
+    const certificate = input.certificate ? await upload('identity-documents', input.certificate, 'certificate') : null
+    if (certificate) uploaded.push({ bucket: 'identity-documents', path: certificate })
     const cv = input.cv ? await upload('provider-cvs', input.cv, 'cv') : null
     if (cv) uploaded.push({ bucket: 'provider-cvs', path: cv })
     const { error } = await supabase.rpc('provider_submit_onboarding_with_certificate', {
@@ -499,7 +513,7 @@ export async function submitProviderOnboarding(input: { fullName: string; yearsE
       if (code.includes('provider_required') || code.includes('authentication_required')) throw new Error('انتهت جلسة الدخول أو أن الحساب ليس حساب فني. سجّل الدخول من صفحة الفنيين ثم أعد المحاولة.')
       if (code.includes('invalid_full_name')) throw new Error('أدخل الاسم الكامل بحروف تتراوح بين 2 و160 حرفًا.')
       if (code.includes('provider_onboarding_already_submitted')) throw new Error('تم إرسال ملفك بالفعل وهو قيد المراجعة أو معتمد؛ لا حاجة لإعادة الإرسال.')
-      if (code.includes('identity_front_document_missing') || code.includes('identity_back_document_missing') || code.includes('certificate_document_missing')) throw new Error('لم يصل أحد ملفات الهوية أو الشهادة كاملًا. أعد اختيار الملفات ثم أرسلها مجددًا.')
+      if (code.includes('identity_front_document_missing') || code.includes('identity_back_document_missing')) throw new Error('لم تصل صور الهوية كاملة. أعد اختيارها ثم أرسلها مجددًا.')
       if (code.includes('cv_document_missing')) throw new Error('لم يصل ملف السيرة الاختياري كاملًا. أعد اختياره أو أرسِل الطلب من دونه.')
       if (code.includes('invalid_identity_front_path') || code.includes('invalid_identity_back_path')) throw new Error('تعذر التحقق من مسار صورة الهوية. أعد اختيار صور JPG أو PNG ثم أرسلها مجددًا.')
       if (code.includes('invalid_certificate_path')) throw new Error('تعذر التحقق من الشهادة. أعد اختيار JPG أو PNG أو PDF ثم أرسلها مجددًا.')
@@ -510,7 +524,7 @@ export async function submitProviderOnboarding(input: { fullName: string; yearsE
       if (code.includes('invalid_service_description')) throw new Error('أضف نبذة مهنية لا تقل عن 10 أحرف.')
       if (code.includes('invalid_phone')) throw new Error('أدخل رقم جوال صحيحًا.')
       if (code.includes('invalid_city')) throw new Error('أدخل مدينة تقديم الخدمة.')
-      if (code.includes('professional_certificate_required')) throw new Error('الشهادة المهنية مطلوبة لإكمال اعتماد الفني.')
+      if (code.includes('certificate_document_missing')) throw new Error('تعذر حفظ الشهادة الاختيارية. أعد اختيارها أو أرسل الملف من دون شهادة.')
       console.error('[provider-onboarding] save failed', { code: error.code, message: error.message, details: error.details, hint: error.hint })
       throw new Error(`تعذر حفظ الملف: ${error.message || 'خطأ غير معروف'}${error.code ? ` (رمز ${error.code})` : ''}`)
     }
