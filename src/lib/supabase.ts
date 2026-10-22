@@ -156,7 +156,7 @@ export async function deleteStoreCoupon(id: string) {
 
 export async function getMyProductOrders() {
   if (!supabase) return { data: [], error: null }
-  return supabase.from('product_orders').select('id,order_number,status,installation_requested,installation_status,city,district,address_text,notes,subtotal,discount_amount,total_amount,provider_id,created_at,product_order_items(id,product_name_snapshot,unit_price,discount_percent_snapshot,quantity,line_total)').order('created_at', { ascending: false }).limit(100)
+  return supabase.from('product_orders').select('id,order_number,status,installation_requested,installation_status,delivery_requested,delivery_status,delivery_pricing_mode,delivery_fee,delivery_distance_km,delivery_eta_minutes,city,district,address_text,notes,subtotal,discount_amount,total_amount,provider_id,created_at,product_order_items(id,product_name_snapshot,unit_price,discount_percent_snapshot,quantity,line_total)').order('created_at', { ascending: false }).limit(100)
 }
 export async function createProductOrder(input: { items: { product_id: string; quantity: number }[]; couponCode?: string; installationRequested: boolean; city: string; district: string; address: string; notes: string }) {
   if (!supabase) throw new Error('المتجر غير متاح الآن.')
@@ -166,7 +166,7 @@ export async function createProductOrder(input: { items: { product_id: string; q
 }
 export async function getAdminProductOrders() {
   if (!supabase) return { data: [], error: null }
-  return supabase.from('product_orders').select('id,order_number,status,installation_requested,installation_status,delivery_requested,delivery_status,city,district,address_text,notes,subtotal,discount_amount,total_amount,provider_id,created_at,cancellation_reason,cancelled_at,refund_status,refund_amount,refund_method,refund_reference,profiles:customer_id(full_name,phone),product_order_items(product_name_snapshot,quantity,line_total),product_installation_jobs(id,status,provider_id,scheduled_at,started_at,completed_at,completion_note),product_order_materials(id,material_name,quantity,unit_cost,source,created_at)').order('created_at', { ascending: false }).limit(200)
+  return supabase.from('product_orders').select('id,order_number,status,installation_requested,installation_status,delivery_requested,delivery_status,delivery_pricing_mode,delivery_fee,delivery_base_fee,delivery_rate,delivery_distance_km,delivery_eta_minutes,city,district,address_text,notes,subtotal,discount_amount,total_amount,provider_id,created_at,cancellation_reason,cancelled_at,refund_status,refund_amount,refund_method,refund_reference,profiles:customer_id(full_name,phone),product_order_items(product_name_snapshot,quantity,line_total),product_installation_jobs(id,status,provider_id,scheduled_at,started_at,completed_at,completion_note),product_order_materials(id,material_name,quantity,unit_cost,source,created_at)').order('created_at', { ascending: false }).limit(200)
 }
 export async function adminCancelProductOrder(orderId: string, reason: string, requestRefund = true) {
   if (!supabase) throw new Error('المتجر غير متاح الآن.')
@@ -216,6 +216,13 @@ export async function adminDispatchProductDelivery(orderId: string) {
 
 export type AuthState = { session: Session | null; user: User | null }
 export type AppNotification = { id: string; title: string; body: string; notification_type: string; target_path: string | null; is_read: boolean; created_at: string }
+
+export async function adminSetProductDeliveryPricing(input: { orderId: string; mode: 'manual' | 'distance' | 'time'; fee?: number; baseFee?: number; rate?: number; distanceKm?: number | null; etaMinutes?: number | null }) {
+  if (!supabase) throw new Error('المتجر غير متاح الآن.')
+  const { data, error } = await supabase.rpc('admin_set_product_delivery_pricing', { p_order_id: input.orderId, p_mode: input.mode, p_fee: input.fee ?? 0, p_base_fee: input.baseFee ?? 0, p_rate: input.rate ?? 0, p_distance_km: input.distanceKm ?? null, p_eta_minutes: input.etaMinutes ?? null })
+  if (error) throw new Error(error.message.includes('invalid_delivery') ? 'بيانات التسعير غير صحيحة.' : error.message)
+  return data
+}
 
 export async function subscribeToMyBookings(onChange: () => void, role: 'customer' | 'provider' = 'customer') {
   if (!supabase) return () => undefined
