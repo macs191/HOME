@@ -33,7 +33,12 @@ export async function initialiseAndroidApp() {
   if (!pushListenersReady) {
     pushListenersReady = true
     await PushNotifications.addListener('registration', ({ value }) => { void registerPushDevice(value, 'android') })
-    await PushNotifications.addListener('registrationError', () => undefined)
+    await PushNotifications.addListener('registrationError', (error) => {
+      window.dispatchEvent(new CustomEvent('homefix:push-error', { detail: error }))
+    })
+    await PushNotifications.addListener('pushNotificationReceived', ({ notification }) => {
+      window.dispatchEvent(new CustomEvent('homefix:push-received', { detail: notification }))
+    })
     await PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
       const target = safeTargetPath(notification.data?.target_path)
       window.history.pushState({}, '', target)
@@ -47,12 +52,12 @@ export async function initialiseAndroidApp() {
 export async function requestAndroidNotifications() {
   if (!isAndroidApp()) return
   await PushNotifications.createChannel({
-    id: 'home-service',
+    id: 'home-service-incoming',
     name: 'إشعارات HOME SERVICE',
     description: 'تحديثات الطلبات ووصول الفني والرسائل المهمة',
     importance: 5,
     visibility: 1,
-    sound: 'default',
+    sound: 'home_ring',
     vibration: true,
   }).catch(() => undefined)
   const permission = await PushNotifications.checkPermissions()

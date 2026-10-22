@@ -9,10 +9,9 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
-  const expectedSecret = Deno.env.get('FCM_WEBHOOK_SECRET')
-  if (!expectedSecret || req.headers.get('x-fcm-webhook-secret') !== expectedSecret) return json({ error: 'forbidden' }, 403)
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (!supabaseUrl || !serviceRole || req.headers.get('authorization') !== `Bearer ${serviceRole}`) return json({ error: 'forbidden' }, 403)
   const projectId = Deno.env.get('FCM_PROJECT_ID')
   const clientEmail = Deno.env.get('FCM_CLIENT_EMAIL')
   const privateKey = Deno.env.get('FCM_PRIVATE_KEY')?.replace(/\\n/g, '\n')
@@ -46,7 +45,7 @@ Deno.serve(async (req) => {
         token: device.token,
         notification: { title: record.title, body: record.body },
         data: { notification_id: record.id, notification_type: record.notification_type || 'general', target_path: record.target_path || '/customer/notifications' },
-        android: { priority: 'high', notification: { channel_id: 'home-service', sound: 'default' } },
+        android: { priority: 'high', notification: { channel_id: 'home-service-incoming', sound: 'home_ring', default_sound: false, default_vibrate_timings: false } },
       } }),
     })
     if (response.ok) sent += 1

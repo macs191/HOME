@@ -59,9 +59,8 @@ function App() {
   useEffect(() => { document.documentElement.dataset.theme = theme; try { localStorage.setItem('homefix-theme-v2', theme) } catch { /* التخزين قد يكون معطلًا في التصفح الخاص */ } }, [theme])
   useEffect(() => {
     let cleanup: (() => void) | undefined
-    void initialiseAndroidApp().then((remove) => { cleanup = remove })
+    void initialiseAndroidApp().then(async (remove) => { cleanup = remove; const auth = await getAuthState(); if (auth.user) await requestAndroidNotifications() }).catch(() => undefined)
     if ('Notification' in window && Notification.permission === 'default') void Notification.requestPermission().catch(() => undefined)
-    void getAuthState().then((auth) => { if (auth.user) void requestAndroidNotifications() }).catch(() => undefined)
     const authSubscription = onAuthStateChange((next) => { if (next.user) void requestAndroidNotifications() })
     return () => { cleanup?.(); authSubscription.unsubscribe() }
   }, [])
@@ -400,7 +399,16 @@ function NotificationMonitor() {
     }
     void connect()
     const authSubscription = onAuthStateChange(() => { void connect() })
-    return () => { active = false; unsubscribe?.(); authSubscription.unsubscribe() }
+    const nativePush = (event: Event) => {
+      if (!active) return
+      const notification = (event as CustomEvent<any>).detail
+      playNotificationChime()
+      if ('Notification' in window && Notification.permission === 'granted' && document.visibilityState === 'hidden') {
+        void navigator.serviceWorker?.ready.then((registration) => registration.showNotification(notification?.title ?? 'إشعار جديد', { body: notification?.body ?? '', icon: '/icons/homefix-192.png', badge: '/icons/homefix-192.png', tag: notification?.id ?? `push-${Date.now()}` })).catch(() => undefined)
+      }
+    }
+    window.addEventListener('homefix:push-received', nativePush)
+    return () => { active = false; unsubscribe?.(); authSubscription.unsubscribe(); window.removeEventListener('homefix:push-received', nativePush) }
   }, [])
   return null
 }
