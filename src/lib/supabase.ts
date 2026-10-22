@@ -370,6 +370,22 @@ export async function createAdminManualBooking(input: { customerId: string; serv
 export async function createBookingFromDraft(draft: BookingDraft, serviceSlug: string, policyAccepted = false) {
   if (!policyAccepted) throw new Error('يرجى تأكيد الموافقة على سياسة الطلب قبل الإرسال.')
   if (!supabase) throw new Error('تعذر إنشاء الطلب الآن. حاول مرة أخرى لاحقًا.')
+  const lengths: Array<[string, string, number, number]> = [
+    ['المدينة', draft.city, 2, 120],
+    ['العنوان التفصيلي', draft.address, 5, 500],
+    ['وصف المشكلة', draft.issue, 10, 4000],
+    ['الحي', draft.district, 0, 160],
+    ['تعليمات الوصول', draft.accessNotes, 0, 1000],
+    ['الفترة الزمنية', draft.scheduledSlot, 0, 100],
+  ]
+  const invalid = lengths.find(([, value, min, max]) => {
+    const length = value.trim().length
+    return length < min || length > max
+  })
+  if (invalid) {
+    const [label, value, min, max] = invalid
+    throw new Error(`${label} يجب أن يكون بين ${min || 0} و${max} حرفًا. الطول الحالي: ${value.trim().length}.`)
+  }
   const { data: service, error: serviceError } = await supabase.from('services').select('id').eq('slug', serviceSlug).eq('is_active', true).maybeSingle()
   if (serviceError) throw serviceError
   if (!service) throw new Error('الخدمة غير متاحة حاليًا')
@@ -389,13 +405,16 @@ export async function createBookingFromDraft(draft: BookingDraft, serviceSlug: s
     p_policy_accepted: policyAccepted,
     p_policy_version: 'home-booking-terms-v1',
   })
-  if (error) throw new Error(error.message || 'تعذر إنشاء الطلب')
+  if (error) {
+    if (error.message.includes('booking_input_too_long')) throw new Error('بيانات الطلب أطول من الحد المسموح. راجع المدينة والعنوان والحي والوصف وتعليمات الوصول ثم حاول مرة أخرى.')
+    throw new Error(error.message || 'تعذر إنشاء الطلب')
+  }
   return { mode: 'live' as const, data }
 }
 
 export async function getMyBookings() {
   if (!supabase) return { data: [], error: null }
-  return supabase.from('bookings').select('id, booking_number, status, payment_status, cancellation_reason, city, district, address_text, latitude, longitude, issue_description, scheduled_date, scheduled_slot, price_snapshot, tracking_consent_at, tracking_revoked_at, created_at, services(name_ar, slug), payments(id,invoice_number,amount,status,payment_method,receipt_reference,review_note), booking_status_history(id,from_status,to_status,note,created_at), reviews(id,quality,punctuality,conduct,value,comment,created_at), booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').order('created_at', { ascending: false }).limit(50)
+  return supabase.from('bookings').select('id, booking_number, status, payment_status, cancellation_reason, city, district, address_text, access_notes, latitude, longitude, issue_description, urgency, scheduled_date, scheduled_slot, price_snapshot, provider_id, provider_amount_snapshot, tracking_consent_at, tracking_revoked_at, created_at, updated_at, services(name_ar, slug), provider_profiles:provider_id(profiles(full_name,phone)), payments(id,invoice_number,amount,status,payment_method,cash_received_amount,receipt_reference,review_note,settled_at,created_at), booking_status_history(id,from_status,to_status,note,created_at), reviews(id,quality,punctuality,conduct,value,comment,created_at), booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').order('created_at', { ascending: false }).limit(50)
 }
 
 
@@ -653,7 +672,7 @@ export async function getAdminDocumentUrl(documentType: string, path: string, do
 export async function getAdminOperations(includeAutoReview = true, autoOffset = 0) {
   if (!supabase) return { recent: [], assignable: [], providers: [], autoReview: [], autoReviewOffset: 0, autoReviewHasMore: false }
   const [recentResult, assignableResult, providerResult] = await Promise.all([
-    supabase.from('bookings').select('id,booking_number,service_id,status,payment_status,cancellation_reason,provider_id,city,district,address_text,latitude,longitude,issue_description,created_at,services(name_ar),profiles!bookings_customer_id_fkey(full_name,phone),provider_profiles(profiles(full_name)),booking_status_history(id,from_status,to_status,note,created_at),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').order('created_at', { ascending: false }).limit(20),
+    supabase.from('bookings').select('id,booking_number,service_id,status,payment_status,cancellation_reason,provider_id,city,district,address_text,access_notes,latitude,longitude,issue_description,urgency,scheduled_date,scheduled_slot,price_snapshot,created_at,updated_at,services(name_ar),profiles!bookings_customer_id_fkey(full_name,phone),provider_profiles(profiles(full_name,phone)),payments(id,invoice_number,amount,status,payment_method,cash_received_amount,settled_at),booking_status_history(id,from_status,to_status,note,created_at),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').order('created_at', { ascending: false }).limit(20),
     supabase.from('bookings').select('id,booking_number,service_id,status,payment_status,cancellation_reason,provider_id,city,district,address_text,latitude,longitude,issue_description,created_at,services(name_ar),profiles!bookings_customer_id_fkey(full_name,phone),provider_profiles(profiles(full_name)),booking_attachments(id,storage_path,mime_type,file_size_bytes,created_at)').is('provider_id', null).in('status', ['pending', 'quoted', 'accepted']).order('created_at', { ascending: true }).limit(100),
     supabase.from('provider_profiles').select('user_id,approval_status,availability_status,base_latitude,base_longitude,service_radius_km,profiles(full_name,phone,is_active),provider_services(service_id,is_active,services(id,name_ar,category_id))').eq('approval_status', 'approved').order('created_at', { ascending: true }).limit(100),
   ])
