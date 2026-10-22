@@ -454,13 +454,31 @@ export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provide
 
 export async function getMyNotifications() {
   if (!supabase) return { data: null, error: new Error('الخدمة غير متاحة الآن.') }
-  return supabase.from('notifications').select('id,title,body,notification_type,target_path,is_read,created_at').order('created_at', { ascending: false }).limit(10)
+  return supabase.from('notifications').select('id,title,body,notification_type,target_path,is_read,created_at').order('created_at', { ascending: false }).limit(100)
 }
 
 export async function markNotificationRead(notificationId: string) {
   if (!supabase) throw new Error('الخدمة غير متاحة الآن.')
   const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId)
   if (error) throw new Error(error.message || 'تعذر تعليم الإشعار كمقروء.')
+}
+
+export async function adminSendUserNotification(input: { userId?: string | null; title: string; body: string; targetPath?: string }) {
+  if (!supabase) throw new Error('خدمة الإشعارات غير متاحة الآن.')
+  const { data, error } = await supabase.rpc('admin_send_user_notification', {
+    p_user_id: input.userId ?? null,
+    p_title: input.title,
+    p_body: input.body,
+    p_target_path: input.targetPath ?? '/customer/notifications',
+  })
+  if (error) {
+    const message = error.message.toLowerCase()
+    if (message.includes('admin_required')) throw new Error('يلزم حساب إداري لإرسال الإشعارات.')
+    if (message.includes('recipient_not_found')) throw new Error('المستخدم غير موجود أو حسابه موقوف.')
+    if (message.includes('invalid_notification')) throw new Error('تحقق من عنوان الإشعار ومحتواه.')
+    throw new Error(`تعذر إرسال الإشعار: ${error.message}`)
+  }
+  return Number(data ?? 0)
 }
 
 export async function registerPushDevice(token: string, platform: 'android' | 'ios' | 'web') {

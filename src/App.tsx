@@ -435,6 +435,18 @@ function NotificationMonitor() {
       if (!active) return
       const notification = (event as CustomEvent<any>).detail
       playNotificationChime()
+      if (notification?.id || notification?.data?.notification_id) {
+        const item: AppNotification = {
+          id: notification.id ?? notification.data.notification_id,
+          title: notification.title ?? 'إشعار جديد',
+          body: notification.body ?? '',
+          notification_type: notification.data?.notification_type ?? 'general',
+          target_path: notification.data?.target_path ?? '/customer/notifications',
+          is_read: false,
+          created_at: new Date().toISOString(),
+        }
+        window.dispatchEvent(new CustomEvent('homefix:notification', { detail: item }))
+      }
       if ('Notification' in window && Notification.permission === 'granted' && document.visibilityState === 'hidden') {
         void navigator.serviceWorker?.ready.then((registration) => registration.showNotification(notification?.title ?? 'إشعار جديد', { body: notification?.body ?? '', icon: '/icons/homefix-192.png', badge: '/icons/homefix-192.png', tag: notification?.id ?? `push-${Date.now()}` })).catch(() => undefined)
       }
