@@ -348,3 +348,18 @@ body:has(.install-guide-overlay) { overflow: hidden; }
   .booking-chat-compose { gap: .35rem; }
   .booking-chat-attachment-image { max-width: 100%; max-height: 13rem; }
 }
+
+/* Android-first interaction contract: large targets, safe areas and stable sheets. */
+@media (max-width: 760px) {
+  :root { --android-safe-bottom: max(12px, env(safe-area-inset-bottom)); }
+  body { -webkit-tap-highlight-color: transparent; overscroll-behavior-x: none; }
+  button, a, select, input, textarea { touch-action: manipulation; }
+  button, .button, .text-link, .location-button, .mobile-bottom-nav a { min-height: 44px; }
+  .button-small { min-height: 40px; }
+  .mobile-bottom-nav { bottom: 0; padding-bottom: var(--android-safe-bottom); min-height: calc(64px + var(--android-safe-bottom)); }
+  .dashboard-page, .inner-page { padding-bottom: calc(28px + var(--android-safe-bottom)); }
+  .form-actions { position: sticky; bottom: var(--android-safe-bottom); z-index: 8; margin-inline: -2px; padding: 10px; border: 1px solid var(--line); border-radius: 16px; background: color-mix(in srgb, var(--surface) 94%, transparent); box-shadow: 0 -8px 24px rgba(11, 29, 43, .08); backdrop-filter: blur(12px); }
+  .form-actions .button { min-height: 48px; }
+  .panel, .form-card, .summary-card { border-radius: 18px; }
+  .account-list-row, .admin-assignable-row, .admin-recent-row { min-height: 64px; }
+}

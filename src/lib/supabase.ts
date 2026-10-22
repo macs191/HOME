@@ -1,4 +1,5 @@
 import { createClient, type Session, type User } from '@supabase/supabase-js'
+import { Capacitor } from '@capacitor/core'
 import type { BookingDraft, Role, Service, ServiceCategory } from '../types'
 import { prepareBookingPhoto, sha256Hex } from './booking-images'
 
@@ -371,7 +372,7 @@ export async function getMyBookings() {
 export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provider'> = 'customer', nextPath?: string) {
   if (!supabase) throw new Error('تعذر تفعيل الدخول بحساب Google.')
   void role // يُختار الدور بعد عودة الحساب الجديد من Google.
-  const callback = new URL('/auth/callback', window.location.origin)
+  const callback = Capacitor.isNativePlatform() ? new URL('com.home.service://auth/callback') : new URL('/auth/callback', window.location.origin)
   if (nextPath?.startsWith('/') && !nextPath.startsWith('//')) callback.searchParams.set('next', nextPath)
   const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: callback.toString() } })
   if (error) throw new Error(authMessage(error))
@@ -386,6 +387,20 @@ export async function markNotificationRead(notificationId: string) {
   if (!supabase) throw new Error('الخدمة غير متاحة الآن.')
   const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId)
   if (error) throw new Error(error.message || 'تعذر تعليم الإشعار كمقروء.')
+}
+
+export async function registerPushDevice(token: string, platform: 'android' | 'ios' | 'web') {
+  if (!supabase || !token.trim()) return
+  const { error } = await supabase.rpc('register_push_device', {
+    p_token: token.trim(), p_platform: platform, p_app_version: import.meta.env.VITE_APP_VERSION ?? '0.1.0',
+  })
+  if (error) throw new Error(error.message || 'تعذر تسجيل جهاز الإشعارات.')
+}
+
+export async function unregisterPushDevice(token: string) {
+  if (!supabase || !token.trim()) return
+  const { error } = await supabase.rpc('unregister_push_device', { p_token: token.trim() })
+  if (error) throw new Error(error.message || 'تعذر إزالة جهاز الإشعارات.')
 }
 
 export async function getMyProviderProfile() {
@@ -505,11 +520,12 @@ export async function submitProviderOnboarding(input: { fullName: string; yearsE
   }
 }
 
-export async function getAdminAccounts(search = '', role: 'all' | 'customer' | 'provider' = 'all') {
+export async function getAdminAccounts(search = '', role: 'all' | 'customer' | 'provider' = 'all', offset = 0, limit = 50) {
   if (!supabase) throw new Error('تعذر تحميل الحسابات الآن.')
-  const { data, error } = await supabase.rpc('admin_list_accounts', { p_search: search.trim() || null, p_role: role })
+  const { data, error } = await supabase.rpc('admin_list_accounts_page', { p_search: search.trim() || null, p_role: role, p_limit: limit, p_offset: offset })
   if (error) throw new Error(error.message.includes('admin_required') ? 'يلزم حساب إداري لعرض الحسابات.' : 'تعذر تحميل الحسابات. حاول مرة أخرى.')
-  return (data ?? []) as Array<{ user_id: string; email: string; role: 'customer' | 'provider'; full_name: string; phone: string | null; city: string | null; is_active: boolean; created_at: string; years_experience: number | null; approval_status: string | null; service_description: string | null }>
+  const rows = (data ?? []) as Array<{ user_id: string; email: string; role: 'customer' | 'provider'; full_name: string; phone: string | null; city: string | null; is_active: boolean; created_at: string; years_experience: number | null; approval_status: string | null; service_description: string | null }>
+  return { rows: rows.slice(0, limit), hasMore: rows.length > limit }
 }
 
 export async function updateAdminAccount(input: { userId: string; fullName: string; phone: string; city: string; yearsExperience?: number | null; serviceDescription?: string }) {

@@ -3,7 +3,7 @@ import { Download, FileText, Power, Search, ShieldCheck, Trash2, UserRound, User
 import { deleteAdminAccount, getAdminAccounts, getAdminAccountRecords, getAdminDocumentUrl, getProviderSpecialtyOptions, setAdminAccountActive, updateAdminAccount, updateAdminProviderSpecialties } from '../lib/supabase'
 import { InlineDocumentViewer } from './InlineDocumentViewer'
 
-type Account = Awaited<ReturnType<typeof getAdminAccounts>>[number]
+type Account = Awaited<ReturnType<typeof getAdminAccounts>>['rows'][number]
 type Records = Awaited<ReturnType<typeof getAdminAccountRecords>>
 
 function csvCell(value: unknown) { return `"${String(value ?? '').split('"').join('""')}"` }
@@ -29,6 +29,8 @@ export function AdminAccountsPanel() {
   const [activeDocument, setActiveDocument] = useState<{ url: string; title: string; filePath: string } | null>(null)
   const [search, setSearch] = useState('')
   const [role, setRole] = useState<'all'|'customer'|'provider'>('all')
+  const [offset, setOffset] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
   const [detailsLoading, setDetailsLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -40,13 +42,18 @@ export function AdminAccountsPanel() {
   const [error, setError] = useState('')
   const [form, setForm] = useState({ fullName: '', phone: '', city: '', years: '', description: '' })
 
-  const loadAccounts = async () => {
+  const loadAccounts = async (nextOffset = offset, append = false) => {
     setLoading(true); setError('')
-    try { setAccounts(await getAdminAccounts(search, role)) }
+    try {
+      const result = await getAdminAccounts(search, role, nextOffset, 50)
+      setAccounts((current) => append ? [...current, ...result.rows] : result.rows)
+      setOffset(nextOffset)
+      setHasMore(result.hasMore)
+    }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'تعذر تحميل الحسابات.') }
     finally { setLoading(false) }
   }
-  useEffect(() => { const timer = window.setTimeout(() => { void loadAccounts() }, 250); return () => window.clearTimeout(timer) }, [search, role])
+  useEffect(() => { setOffset(0); const timer = window.setTimeout(() => { void loadAccounts(0, false) }, 250); return () => window.clearTimeout(timer) }, [search, role])
   useEffect(() => { let active = true; getProviderSpecialtyOptions().then(({ data, error }) => { if (active) { if (error) setError('تعذر تحميل قائمة الخدمات. حاول مرة أخرى.'); else setServiceOptions((data as any[]) ?? []) } }).catch(() => { if (active) setError('تعذر تحميل قائمة الخدمات. حاول مرة أخرى.') }); return () => { active = false } }, [])
 
   const selectAccount = async (account: Account) => {
@@ -135,7 +142,7 @@ export function AdminAccountsPanel() {
       <section className="panel accounts-list-panel">
         <div className="accounts-filters"><label className="accounts-search"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ابحث بالاسم أو البريد أو الجوال" /></label><select aria-label="تصفية نوع الحساب" value={role} onChange={(event) => setRole(event.target.value as typeof role)}><option value="all">الكل</option><option value="customer">العملاء</option><option value="provider">الفنيون</option></select></div>
         {error && !selected && <div className="inline-error" role="alert"><X size={16} />{error}<button type="button" onClick={() => void loadAccounts()}>إعادة المحاولة</button></div>}
-        {loading ? <div className="loading-state">جارٍ تحميل الحسابات…</div> : accounts.length ? <div className="account-list">{accounts.map((item) => <button type="button" key={item.user_id} className={`account-list-row ${selected?.user_id === item.user_id ? 'selected' : ''}`} onClick={() => void selectAccount(item)}><span className="account-avatar">{item.role === 'provider' ? <ShieldCheck size={18} /> : <UserRound size={18} />}</span><span className="account-list-copy"><strong>{item.full_name || 'بدون اسم'}</strong><small>{item.email}</small><small>{item.phone || 'لا يوجد رقم جوال'} · {item.role === 'provider' ? 'فني' : 'عميل'} · {item.is_active ? 'نشط' : 'موقوف'}</small></span><span className="account-state">{item.role === 'provider' ? statusLabels[item.approval_status ?? 'pending'] ?? item.approval_status : 'عميل'}</span></button>)}</div> : <div className="empty-inline">لا توجد حسابات مطابقة.</div>}
+        {loading ? <div className="loading-state">جارٍ تحميل الحسابات…</div> : accounts.length ? <><div className="account-list">{accounts.map((item) => <button type="button" key={item.user_id} className={`account-list-row ${selected?.user_id === item.user_id ? 'selected' : ''}`} onClick={() => void selectAccount(item)}><span className="account-avatar">{item.role === 'provider' ? <ShieldCheck size={18} /> : <UserRound size={18} />}</span><span className="account-list-copy"><strong>{item.full_name || 'بدون اسم'}</strong><small>{item.email}</small><small>{item.phone || 'لا يوجد رقم جوال'} · {item.role === 'provider' ? 'فني' : 'عميل'} · {item.is_active ? 'نشط' : 'موقوف'}</small></span><span className="account-state">{item.role === 'provider' ? statusLabels[item.approval_status ?? 'pending'] ?? item.approval_status : 'عميل'}</span></button>)}</div>{hasMore && <button type="button" className="button button-secondary button-wide admin-load-more" onClick={() => void loadAccounts(offset + 50, true)} disabled={loading}>تحميل حسابات أقدم</button>}</> : <div className="empty-inline">لا توجد حسابات مطابقة.</div>}
       </section>
       <section className="panel account-detail-panel">
         {!selected ? <div className="account-detail-empty"><UsersRound size={30} /><h3>اختر حسابًا لعرض تفاصيله</h3><p>ستظهر هنا بيانات الحساب وسجلاته ومرفقاته المصرح بها.</p></div> : <>

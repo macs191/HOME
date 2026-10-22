@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { GeoPoint } from '../lib/geo'
+import { MAPS_PROVIDER } from '../lib/coverage'
 
 type SearchResult = { display_name: string; lat: string; lon: string; address?: { city?: string; town?: string; village?: string; suburb?: string; neighbourhood?: string } }
 type Props = { value?: GeoPoint; onChange: (value: { point: GeoPoint; address: string; district?: string; city?: string }) => void }
@@ -31,7 +32,7 @@ export function MapPicker({ value, onChange }: Props) {
   const [results, setResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
   const [satellite, setSatellite] = useState(true)
-  const googleKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+  const googleKey = MAPS_PROVIDER === 'google' ? import.meta.env.VITE_GOOGLE_MAPS_API_KEY : undefined
 
   useEffect(() => {
     if (!mapNode.current || mapRef.current) return
@@ -93,5 +94,5 @@ export function MapPicker({ value, onChange }: Props) {
     setSatellite((current) => !current)
   }
 
-  return <div className="map-picker"><div className="map-search"><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void search() } }} placeholder={googleKey ? 'ابحث في Google عن العنوان أو الحي' : 'ابحث عن العنوان (بحث مجاني)'} /><button type="button" onClick={() => void search()} disabled={searching}>{searching ? '...' : 'بحث'}</button>{results.length > 0 && <div className="map-results">{results.map((result, index) => <button type="button" key={`${result.display_name}-${index}`} onClick={() => googleKey ? void chooseGoogle(result as SearchResult & { google_place_id?: string }) : selectResult(result)}>{result.display_name}<small>{googleKey ? 'Google Places' : 'OpenStreetMap'}</small></button>)}</div>}</div><div className="map-toolbar"><button type="button" className="filter-chip selected" onClick={toggleLayer}>{satellite ? 'عرض الطرق' : 'عرض القمر الصناعي'}</button><span>{googleKey ? 'بحث Google مفعل' : 'بحث مجاني عبر OpenStreetMap'}</span></div><div className="map-canvas" ref={mapNode} /><small className="map-attribution">صور الأقمار: NASA GIBS (دقة عامة) · الطرق: © OpenStreetMap contributors · البحث عبر OpenStreetMap Nominatim</small></div>
+  return <div className="map-picker"><div className="map-search"><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void search() } }} placeholder={googleKey ? 'ابحث في Google عن العنوان أو الحي' : 'ابحث عن العنوان (بحث مجاني)'} /><button type="button" onClick={() => void search()} disabled={searching}>{searching ? '...' : 'بحث'}</button>{results.length > 0 && <div className="map-results">{results.map((result, index) => <button type="button" key={`${result.display_name}-${index}`} onClick={() => googleKey ? void chooseGoogle(result as SearchResult & { google_place_id?: string }) : selectResult(result)}>{result.display_name}<small>{googleKey ? 'Google Places' : 'OpenStreetMap'}</small></button>)}</div>}</div><div className="map-toolbar"><button type="button" className="filter-chip selected" onClick={toggleLayer}>{satellite ? 'عرض الطرق' : 'عرض القمر الصناعي'}</button><span>{googleKey ? 'مزود الخرائط: Google' : 'مزود الخرائط: OpenStreetMap'}</span></div><div className="map-canvas" ref={mapNode} /><small className="map-attribution">صور الأقمار: NASA GIBS (دقة عامة) · الطرق: © OpenStreetMap contributors · المصدر: {googleKey ? 'Google Places' : 'OpenStreetMap Nominatim'}</small></div>
 }
