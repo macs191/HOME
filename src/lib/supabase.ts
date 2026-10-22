@@ -1,6 +1,7 @@
 import { createClient, type Session, type User } from '@supabase/supabase-js'
 import { Capacitor } from '@capacitor/core'
 import { Browser } from '@capacitor/browser'
+import { GoogleSignIn } from '@capawesome/capacitor-google-sign-in'
 import type { BookingDraft, Role, Service, ServiceCategory } from '../types'
 import { prepareBookingPhoto, sha256Hex } from './booking-images'
 
@@ -325,6 +326,7 @@ export async function completeGoogleProfile(input: { role: Extract<Role, 'custom
 
 export async function signOutAccount() {
   if (!supabase) return
+  await GoogleSignIn.signOut().catch(() => undefined)
   const { error } = await supabase.auth.signOut()
   if (error) throw new Error(error.message || 'تعذر تسجيل الخروج بأمان.')
 }
@@ -381,12 +383,17 @@ export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provide
   if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
     const current = await getAuthState()
     if (current.user) throw new Error('يوجد حساب مفتوح حاليًا. سجّل الخروج أولًا قبل الدخول بحساب آخر.')
-    const callback = new URL('com.home.service://auth/callback')
-    if (nextPath?.startsWith('/') && !nextPath.startsWith('//')) callback.searchParams.set('next', nextPath)
-    const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: callback.toString(), skipBrowserRedirect: true } })
-    if (error || !data?.url) throw new Error(authMessage(error ?? { message: 'تعذر فتح Google.' }))
-    await Browser.open({ url: data.url })
-    return { flow: 'redirect' as const }
+    const clientId = (import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID as string | undefined)?.trim() || '608379006778-ucli23t7tlku02tvs4ei4pr8k2m5gj4b.apps.googleusercontent.com'
+    try {
+      await GoogleSignIn.initialize({ clientId })
+      const result = await GoogleSignIn.signIn()
+      if (!result.idToken) throw new Error('لم يُرجع Google رمز دخول صالحًا.')
+      const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: result.idToken })
+      if (error) throw error
+      return { flow: 'native' as const }
+    } catch (error) {
+      throw new Error(authMessage(error as { message?: string }))
+    }
   }
   const callback = Capacitor.isNativePlatform() ? new URL('com.home.service://auth/callback') : new URL('/auth/callback', window.location.origin)
   if (nextPath?.startsWith('/') && !nextPath.startsWith('//')) callback.searchParams.set('next', nextPath)
