@@ -9,18 +9,19 @@ export function playNotificationChime() {
     if (!AudioContextClass) return
     const context = new AudioContextClass()
     const now = context.currentTime
-    ;[880, 1174].forEach((frequency, index) => {
+    for (let index = 0; index < 10; index += 1) {
+      const start = now + index * 0.5
       const oscillator = context.createOscillator()
       const gain = context.createGain()
       oscillator.type = 'sine'
-      oscillator.frequency.value = frequency
-      gain.gain.setValueAtTime(0.0001, now + index * 0.13)
-      gain.gain.exponentialRampToValueAtTime(0.13, now + index * 0.13 + 0.02)
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + index * 0.13 + 0.22)
+      oscillator.frequency.value = index % 2 ? 1174 : 880
+      gain.gain.setValueAtTime(0.0001, start)
+      gain.gain.exponentialRampToValueAtTime(0.13, start + 0.025)
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.34)
       oscillator.connect(gain); gain.connect(context.destination)
-      oscillator.start(now + index * 0.13); oscillator.stop(now + index * 0.13 + 0.23)
-    })
-    window.setTimeout(() => void context.close(), 700)
+      oscillator.start(start); oscillator.stop(start + 0.36)
+    }
+    window.setTimeout(() => void context.close(), 5400)
   } catch { /* لا نوقف واجهة التطبيق إذا منع المتصفح الصوت */ }
 }
 

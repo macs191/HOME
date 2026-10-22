@@ -166,7 +166,7 @@ export async function createProductOrder(input: { items: { product_id: string; q
 }
 export async function getAdminProductOrders() {
   if (!supabase) return { data: [], error: null }
-  return supabase.from('product_orders').select('id,order_number,status,installation_requested,installation_status,city,district,address_text,notes,subtotal,discount_amount,total_amount,provider_id,created_at,cancellation_reason,cancelled_at,refund_status,refund_amount,refund_method,refund_reference,profiles:customer_id(full_name,phone),product_order_items(product_name_snapshot,quantity,line_total),product_installation_jobs(id,status,provider_id,scheduled_at,started_at,completed_at,completion_note),product_order_materials(id,material_name,quantity,unit_cost,source,created_at)').order('created_at', { ascending: false }).limit(200)
+  return supabase.from('product_orders').select('id,order_number,status,installation_requested,installation_status,delivery_requested,delivery_status,city,district,address_text,notes,subtotal,discount_amount,total_amount,provider_id,created_at,cancellation_reason,cancelled_at,refund_status,refund_amount,refund_method,refund_reference,profiles:customer_id(full_name,phone),product_order_items(product_name_snapshot,quantity,line_total),product_installation_jobs(id,status,provider_id,scheduled_at,started_at,completed_at,completion_note),product_order_materials(id,material_name,quantity,unit_cost,source,created_at)').order('created_at', { ascending: false }).limit(200)
 }
 export async function adminCancelProductOrder(orderId: string, reason: string, requestRefund = true) {
   if (!supabase) throw new Error('المتجر غير متاح الآن.')
@@ -207,6 +207,13 @@ export async function adminAssignProductOrder(orderId: string, providerId: strin
   return data
 }
 
+export async function adminDispatchProductDelivery(orderId: string) {
+  if (!supabase) throw new Error('خدمة التوصيل غير متاحة الآن.')
+  const { data, error } = await supabase.rpc('admin_dispatch_product_delivery', { p_order_id: orderId })
+  if (error) throw new Error(error.message.includes('product_order_not_found_or_terminal') ? 'لا يمكن إرسال طلب مكتمل أو ملغى للتوصيل.' : error.message)
+  return data
+}
+
 export type AuthState = { session: Session | null; user: User | null }
 export type AppNotification = { id: string; title: string; body: string; notification_type: string; target_path: string | null; is_read: boolean; created_at: string }
 
@@ -226,6 +233,18 @@ export async function subscribeToMyNotifications(onInsert: (notification: AppNot
   const channel = supabase.channel(`notifications:${data.user.id}:${crypto.randomUUID()}`)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${data.user.id}` }, (payload) => onInsert(payload.new as AppNotification))
     .subscribe()
+  return () => { void supabase?.removeChannel(channel) }
+}
+
+export async function subscribeToAdminChanges(onChange: (table: 'bookings' | 'product_orders' | 'products' | 'provider_profiles' | 'notifications') => void) {
+  if (!supabase) return () => undefined
+  const { data } = await supabase.auth.getUser()
+  if (!data.user) return () => undefined
+  const channel = supabase.channel(`admin-live:${data.user.id}:${crypto.randomUUID()}`)
+  for (const table of ['bookings', 'product_orders', 'products', 'provider_profiles', 'notifications'] as const) {
+    channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => onChange(table))
+  }
+  channel.subscribe()
   return () => { void supabase?.removeChannel(channel) }
 }
 

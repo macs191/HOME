@@ -265,3 +265,6 @@ body:has(.document-viewer-overlay) { overflow: hidden; }
 .invoice-qr-row > div { display: grid; gap: .55rem; }
 .invoice-qr-row small { max-width: 220px; line-height: 1.5; }
 @media (max-width: 520px) { .invoice-qr-row { align-items: flex-start; } .invoice-qr-row img { width: 96px; height: 96px; } }
+
+.nav-badge { display: inline-grid; place-items: center; min-width: 1.35rem; height: 1.35rem; padding: 0 .25rem; margin-inline-start: auto; border-radius: 999px; background: var(--gold, #d9a441); color: #17120c; font-size: .72rem; line-height: 1; }
+.form-help { margin: -.35rem 0 .65rem; font-size: .82rem; line-height: 1.6; }

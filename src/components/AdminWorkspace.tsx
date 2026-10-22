@@ -11,7 +11,7 @@ import { AdminReportsPanel } from './AdminReportsPanel'
 import { BookingAttachmentsPanel } from './BookingAttachmentsPanel'
 import { BookingStatusTimeline } from './BookingStatusTimeline'
 import { BookingChat } from './BookingChat'
-import { addProviderLedgerEntry, assignBookingToProvider, autoAssignBookingToNearestProvider, getAdminDocumentUrl, getAdminOperations, getAdminOverview, getAdminProviderApplications, reviewProviderVerification, setProviderCommission, signOutAccount } from '../lib/supabase'
+import { addProviderLedgerEntry, assignBookingToProvider, autoAssignBookingToNearestProvider, getAdminDocumentUrl, getAdminOperations, getAdminOverview, getAdminProviderApplications, reviewProviderVerification, setProviderCommission, signOutAccount, subscribeToAdminChanges } from '../lib/supabase'
 import { MobileBottomNav } from './MobileBottomNav'
 import { NotificationsPanel } from './NotificationsPanel'
 import { InlineDocumentViewer } from './InlineDocumentViewer'
@@ -19,6 +19,7 @@ import { UnifiedOrdersCenter } from './UnifiedOrdersCenter'
 import { AdminAuditPanel } from './AdminAuditPanel'
 import { AdminAISettingsPanel } from './AdminAISettingsPanel'
 import { ActionConfirmDialog } from './ActionConfirmDialog'
+import { playNotificationChime } from './NotificationsPanel'
 
 type Section = 'overview' | 'new-order' | 'operations' | 'reports' | 'accounts' | 'applications' | 'catalog' | 'products' | 'quotes' | 'payments' | 'settings' | 'notifications' | 'audit'
 const navItems: { id: Section; label: string; icon: typeof Gauge }[] = [
@@ -43,6 +44,7 @@ export function AdminWorkspace() {
   const [amount, setAmount] = useState(''); const [note, setNote] = useState('')
   const [commissionInputs, setCommissionInputs] = useState<Record<string,string>>({})
   const [message, setMessage] = useState(''); const [operationsQuery, setOperationsQuery] = useState(''); const [operationsStatus, setOperationsStatus] = useState('all'); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false)
+  const [liveAlerts, setLiveAlerts] = useState({ bookings: 0, product_orders: 0, products: 0, provider_profiles: 0, notifications: 0 })
   useEffect(() => { if (section === 'operations') { const requested = searchParams.get('booking'); if (requested) setBookingId(requested) } }, [section, searchParams])
   const filterOperations = (rows: any[]) => rows.filter((row) => { const customer = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles; const haystack = [row.booking_number, row.services?.name_ar, customer?.full_name, customer?.phone, row.city, row.district, row.issue_description].filter(Boolean).join(' ').toLowerCase(); return (!operationsQuery.trim() || haystack.includes(operationsQuery.trim().toLowerCase())) && (operationsStatus === 'all' || row.status === operationsStatus) })
   const filteredAssignable = useMemo(() => filterOperations(operations.assignable), [operations.assignable, operationsQuery, operationsStatus])
@@ -61,6 +63,20 @@ export function AdminWorkspace() {
     return true
   }
   useEffect(() => { void load() }, [section])
+  useEffect(() => {
+    let active = true
+    let refreshTimer: number | undefined
+    let unsubscribe: (() => void) | undefined
+    void subscribeToAdminChanges((table) => {
+      if (!active) return
+      setLiveAlerts((current) => ({ ...current, [table]: current[table] + 1 }))
+      playNotificationChime()
+      window.dispatchEvent(new CustomEvent('homefix:admin-data-changed', { detail: { table } }))
+      window.clearTimeout(refreshTimer)
+      refreshTimer = window.setTimeout(() => { void load() }, 450)
+    }).then((cleanup) => { if (active) unsubscribe = cleanup; else cleanup() })
+    return () => { active = false; window.clearTimeout(refreshTimer); unsubscribe?.() }
+  }, [section])
   useEffect(() => { if (!navItems.some((item) => item.id === rawSection)) navigate('/admin/overview', { replace: true }) }, [rawSection, navigate])
   const run = async (action: () => Promise<any>, success: string, reload = true) => {
     setBusy(true); setMessage('')
@@ -101,7 +117,8 @@ export function AdminWorkspace() {
     void run(() => setProviderCommission(id, Number(value)), 'تم حفظ نسبة عمولة الفني.', true)
   }
   const handleSignout = async () => { setBusy(true); setMessage(''); try { await signOutAccount(); window.location.assign('/') } catch (error) { setMessage(`تعذر تسجيل الخروج: ${error instanceof Error ? error.message : 'حاول مرة أخرى.'}`) } finally { setBusy(false) } }
-  const nav = (items: typeof navItems, label: string) => <nav className="dashboard-nav-links" aria-label={label}>{items.map(({ id, label, icon: Icon }) => <Link key={id} to={`/admin/${id}`} className={section === id ? 'active' : ''} aria-current={section === id ? 'page' : undefined}><Icon size={17} /><span>{label}</span><ChevronLeft size={15} className="nav-chevron" /></Link>)}</nav>
+  const alertFor = (id: Section) => id === 'operations' ? liveAlerts.bookings : id === 'products' ? liveAlerts.product_orders + liveAlerts.products : id === 'applications' ? liveAlerts.provider_profiles : id === 'notifications' ? liveAlerts.notifications : 0
+  const nav = (items: typeof navItems, label: string) => <nav className="dashboard-nav-links" aria-label={label}>{items.map(({ id, label, icon: Icon }) => <Link key={id} to={`/admin/${id}`} className={section === id ? 'active' : ''} aria-current={section === id ? 'page' : undefined}><Icon size={17} /><span>{label}</span>{alertFor(id) > 0 && <b className="nav-badge" aria-label={`${alertFor(id)} تحديثات جديدة`}>{Math.min(alertFor(id), 99)}</b>}<ChevronLeft size={15} className="nav-chevron" /></Link>)}</nav>
 
   return <div className="container dashboard-page admin-workspace"><ActionConfirmDialog open={pendingAssignment !== null} title={pendingAssignment?.kind === 'manual' ? 'تأكيد إسناد الطلب' : 'تأكيد المطابقة التلقائية'} description={pendingAssignment?.kind === 'manual' ? `سيتم إسناد الطلب #${pendingAssignment.bookingNumber} إلى الفني ${pendingAssignment.providerName}. راجع الملخص قبل المتابعة.` : pendingAssignment ? `ستحاول المطابقة التلقائية اختيار فني مناسب للطلب #${pendingAssignment.bookingNumber} وفق التخصص والموقع والتوفر المسجل.` : ''} confirmLabel={pendingAssignment?.kind === 'manual' ? 'تأكيد الإسناد' : 'تشغيل المطابقة'} tone="primary" busy={busy} onCancel={() => setPendingAssignment(null)} onConfirm={confirmAssignment} /><div className="dashboard-top"><div><span className="eyebrow">إدارة المنصة</span><h1>{sectionTitle[section]}</h1><p className="muted">تحكم مستقل وواضح في كل جزء من تشغيل المنصة.</p></div><div className="dashboard-top-actions"><Link to="/services" className="button button-secondary button-small"><Search size={15} /> معاينة الخدمات</Link><button type="button" className="button button-secondary button-small mobile-admin-signout" onClick={handleSignout}><LogOut size={15} /> تسجيل الخروج</button></div></div>
       <div className="admin-top-nav admin-top-nav-primary">{nav(navItems.slice(0, 6), 'أقسام الإدارة الأساسية')}</div><div className="admin-top-nav admin-top-nav-secondary">{nav(navItems.slice(6), 'أدوات الإدارة')}</div><div className="dashboard-shell"><aside className="dashboard-nav"><div className="nav-user"><span className="user-avatar"><ShieldCheck size={18} /></span><div><strong>مدير المنصة</strong><small>إدارة العملاء والخدمات والطلبات</small></div></div>{nav(navItems, 'أقسام الإدارة')}<div className="nav-bottom"><Link to="/" className="button button-secondary button-wide">العودة للموقع</Link><button type="button" onClick={handleSignout} className="nav-logout"><LogOut size={15} /> تسجيل الخروج</button></div></aside>
