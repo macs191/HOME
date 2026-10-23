@@ -1240,3 +1240,10 @@ export async function subscribeToBookingTracking(bookingId: string, onChange: ()
   const channel = supabase.channel(`booking-tracking:${bookingId}:${crypto.randomUUID()}`).on('postgres_changes', { event: '*', schema: 'public', table: 'booking_tracking_locations', filter: `booking_id=eq.${bookingId}` }, () => onChange()).subscribe()
   return () => { void supabase?.removeChannel(channel) }
 }
+
+export type BookingCallParticipant = { user_id: string; display_name: string; participant_role: 'customer' | 'provider' | 'admin' }
+
+export async function getBookingCallParticipants(bookingId: string) {
+  if (!supabase) return { data: null, error: new Error('الاتصال المباشر غير متاح في وضع المعاينة.') }
+  return await supabase.rpc('get_booking_call_participants', { p_booking_id: bookingId }) as { data: BookingCallParticipant[] | null; error: any }
+}
