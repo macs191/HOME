@@ -13,7 +13,6 @@ function numericUid(userId: string) {
 }
 
 export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetName, directAdminId, fixedTargetLabel, floating = false, incomingOnly = false }: { bookingId?: string; targetRole?: 'admin' | 'provider' | 'customer'; directTargetId?: string; directTargetName?: string; directAdminId?: string; fixedTargetLabel?: string; floating?: boolean; incomingOnly?: boolean }) {
-  const [userId, setUserId] = useState('')
   const [participants, setParticipants] = useState<BookingCallParticipant[]>([])
   const [targetId, setTargetId] = useState('')
   const [state, setState] = useState<CallState>('idle')
@@ -22,6 +21,7 @@ export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetN
   const [message, setMessage] = useState('')
   const [seconds, setSeconds] = useState(0)
   const [channelReady, setChannelReady] = useState(false)
+  const userIdRef = useRef('')
   const signalChannelRef = useRef<any>(null)
   const agoraClientRef = useRef<any>(null)
   const localTrackRef = useRef<any>(null)
@@ -37,10 +37,12 @@ export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetN
     try { localTrackRef.current?.close(); localTrackRef.current = null; if (agoraClientRef.current) await agoraClientRef.current.leave() } catch { /* cleanup must remain best effort */ }
     agoraClientRef.current = null
   }
-  const reset = () => { void leaveAgora(); callIdRef.current = ''; currentTargetRef.current = ''; setIncoming(null); setState('idle'); stateRef.current = 'idle'; setMuted(false); setSeconds(0) }
+  const reset = (nextMessage = '') => { void leaveAgora(); callIdRef.current = ''; currentTargetRef.current = ''; setIncoming(null); setState('idle'); stateRef.current = 'idle'; setMuted(false); setSeconds(0); setMessage(nextMessage) }
 
   const joinAgora = async (callId: string) => {
-    const uid = numericUid(userId)
+    const authenticatedUserId = userIdRef.current
+    if (!authenticatedUserId) throw new Error('authentication_required')
+    const uid = numericUid(authenticatedUserId)
     const channelName = `homefix-${callId}`
     const result = await getAgoraRtcToken(channelName, uid)
     if (result.error || !result.data) throw new Error(result.error?.message || 'agora_token_failed')
@@ -53,7 +55,7 @@ export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetN
       setState('connected'); stateRef.current = 'connected'; setMessage('')
     })
     client.on('user-unpublished', () => { setMessage('توقف صوت الطرف الآخر مؤقتًا.') })
-    client.on('user-left', () => { setMessage('غادر الطرف الآخر المكالمة.'); reset() })
+    client.on('user-left', () => { reset('غادر الطرف الآخر المكالمة.') })
     await client.join(result.data.appId, result.data.channelName, result.data.token, result.data.uid)
     const track = await AgoraRTC.createMicrophoneAudioTrack({ encoderConfig: 'speech_low_quality' })
     localTrackRef.current = track
@@ -67,7 +69,7 @@ export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetN
     void (async () => {
       const auth = await getAuthState(); if (!active || !auth.user) return
       if (!supabase) throw new Error('الاتصال غير متاح في وضع المعاينة.')
-      setUserId(auth.user.id)
+      userIdRef.current = auth.user.id
       let rows: BookingCallParticipant[] = []
       let topic = ''
       if (directTargetId) { rows = [{ user_id: directTargetId, display_name: directTargetName ?? 'الحساب', participant_role: targetRole ?? 'customer' }]; topic = `voice-direct:${directTargetId}:${auth.user.id}` }
@@ -83,9 +85,9 @@ export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetN
       setParticipants(rows); setTargetId(rows[0]?.user_id ?? '')
       channel = supabase.channel(topic, { config: { broadcast: { self: false }, private: true } })
       channel.on('broadcast', { event: 'voice-invite' }, ({ payload }: { payload: Signal }) => { if (payload.to !== auth.user!.id || stateRef.current !== 'idle') return; callIdRef.current = payload.callId; currentTargetRef.current = payload.from; setIncoming(payload); setState('incoming'); stateRef.current = 'incoming' })
-      channel.on('broadcast', { event: 'voice-accepted' }, async ({ payload }: { payload: Signal }) => { if (payload.to !== auth.user!.id || payload.callId !== callIdRef.current) return; setState('calling'); stateRef.current = 'calling'; try { await joinAgora(payload.callId) } catch (error) { const code = error instanceof Error ? error.message : ''; setMessage(code === 'agora_not_configured' ? 'Agora غير مهيأة في Supabase. أضف AGORA_APP_ID وAGORA_APP_CERTIFICATE إلى Edge Function Secrets.' : code === 'authentication_required' ? 'انتهت جلسة الدخول. سجّل الدخول من جديد.' : 'تعذر بدء Agora. تحقق من أسرار Agora وصلاحية الميكروفون واتصال الإنترنت.'); reset() } })
-      channel.on('broadcast', { event: 'voice-rejected' }, ({ payload }: { payload: Signal }) => { if (payload.to === auth.user!.id && payload.callId === callIdRef.current) { setMessage('لم يتم قبول المكالمة.'); reset() } })
-      channel.on('broadcast', { event: 'voice-ended' }, ({ payload }: { payload: Signal }) => { if (payload.to === auth.user!.id && payload.callId === callIdRef.current) { setMessage('أنهى الطرف الآخر المكالمة.'); reset() } })
+      channel.on('broadcast', { event: 'voice-accepted' }, async ({ payload }: { payload: Signal }) => { if (payload.to !== auth.user!.id || payload.callId !== callIdRef.current) return; setState('calling'); stateRef.current = 'calling'; try { await joinAgora(payload.callId) } catch (error) { const code = error instanceof Error ? error.message : ''; reset(code === 'agora_not_configured' ? 'Agora غير مهيأة في Supabase. أضف AGORA_APP_ID وAGORA_APP_CERTIFICATE إلى Edge Function Secrets.' : code === 'authentication_required' ? 'انتهت جلسة الدخول. سجّل الدخول من جديد.' : 'تعذر بدء Agora. تحقق من أسرار Agora وصلاحية الميكروفون واتصال الإنترنت.') } })
+      channel.on('broadcast', { event: 'voice-rejected' }, ({ payload }: { payload: Signal }) => { if (payload.to === auth.user!.id && payload.callId === callIdRef.current) reset('لم يتم قبول المكالمة.') })
+      channel.on('broadcast', { event: 'voice-ended' }, ({ payload }: { payload: Signal }) => { if (payload.to === auth.user!.id && payload.callId === callIdRef.current) reset('أنهى الطرف الآخر المكالمة.') })
       channel.subscribe((status: string) => { if (status === 'SUBSCRIBED') { signalChannelRef.current = channel; setChannelReady(true); setMessage('') } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { setChannelReady(false); setMessage('تعذر فتح قناة الاتصال. تحقق من تسجيل الدخول واتصال الإنترنت.') } })
     })().catch(() => setMessage('تعذر تهيئة الاتصال الصوتي.'))
     return () => { active = false; setChannelReady(false); signalChannelRef.current = null; void channel?.unsubscribe(); reset() }
@@ -97,15 +99,15 @@ export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetN
     if (!targetId || !signalChannelRef.current || !channelReady || state !== 'idle') { if (!channelReady) setMessage('انتظر لحظة حتى يتم تجهيز الاتصال…'); return }
     setMessage('جارٍ إرسال طلب الاتصال…'); callIdRef.current = crypto.randomUUID(); currentTargetRef.current = targetId; setState('calling'); stateRef.current = 'calling'
     const target = participants.find((item) => item.user_id === targetId)
-    try { await send('voice-invite', { callId: callIdRef.current, from: userId, to: targetId, name: target?.display_name ?? 'مستخدم' }) } catch { setMessage('تعذر إرسال طلب الاتصال. تحقق من اتصال Supabase ثم حاول مرة أخرى.'); reset() }
+    try { await send('voice-invite', { callId: callIdRef.current, from: userIdRef.current, to: targetId, name: target?.display_name ?? 'مستخدم' }) } catch { reset('تعذر إرسال طلب الاتصال. تحقق من اتصال Supabase ثم حاول مرة أخرى.') }
   }
   const accept = async () => {
     if (!incoming) return
     const callInfo = incoming; setMessage('جارٍ تشغيل Agora والميكروفون…'); setIncoming(null); setState('calling'); stateRef.current = 'calling'
-    try { await send('voice-accepted', { callId: callInfo.callId, from: userId, to: callInfo.from }); await joinAgora(callInfo.callId) } catch { setMessage('تعذر تشغيل المكالمة. تحقق من إعداد Agora وصلاحية الميكروفون.'); reset() }
+    try { await send('voice-accepted', { callId: callInfo.callId, from: userIdRef.current, to: callInfo.from }); await joinAgora(callInfo.callId) } catch (error) { const code = error instanceof Error ? error.message : ''; reset(code === 'agora_not_configured' ? 'Agora غير مهيأة في Supabase. أضف AGORA_APP_ID وAGORA_APP_CERTIFICATE إلى Edge Function Secrets.' : code === 'authentication_required' ? 'انتهت جلسة الدخول. سجّل الدخول من جديد.' : 'تعذر تشغيل المكالمة. تحقق من إعداد Agora وصلاحية الميكروفون واتصال الإنترنت.') }
   }
-  const reject = async () => { if (incoming) await send('voice-rejected', { callId: incoming.callId, from: userId, to: incoming.from }); reset() }
-  const hangup = async () => { if (callIdRef.current && currentTargetRef.current) await send('voice-ended', { callId: callIdRef.current, from: userId, to: currentTargetRef.current }); reset() }
+  const reject = async () => { if (incoming) await send('voice-rejected', { callId: incoming.callId, from: userIdRef.current, to: incoming.from }); reset() }
+  const hangup = async () => { if (callIdRef.current && currentTargetRef.current) await send('voice-ended', { callId: callIdRef.current, from: userIdRef.current, to: currentTargetRef.current }); reset() }
   const toggleMute = () => { const next = !muted; localTrackRef.current?.setEnabled(!next); setMuted(next) }
   const target = participants.find((item) => item.user_id === targetId)
   const formatTime = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
