@@ -1,4 +1,4 @@
-import { Bell, Download, Moon, Search, Sun, UserRound, X } from 'lucide-react'
+import { Bell, Download, Menu, Moon, Search, Sun, UserRound, X } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { BrandMark } from './Brand'
@@ -34,8 +34,9 @@ function InstallGuide({ onClose }: { onClose: () => void }) {
   </div>
 }
 
-function ProfileHub({ role, onClose, onSignOut, signingOut }: { role: 'customer' | 'provider' | null; onClose: () => void; onSignOut: () => void; signingOut: boolean }) {
+function ProfileHub({ role, onClose, onSignOut, signingOut }: { role: 'customer' | 'provider' | 'admin' | null; onClose: () => void; onSignOut: () => void; signingOut: boolean }) {
   if (!role) return <section className="profile-hub" role="dialog" aria-label="الحساب"><div className="profile-hub-head"><strong>الحساب</strong><button type="button" className="icon-button" onClick={onClose} aria-label="إغلاق"><X size={18} /></button></div><p className="muted">سجّل الدخول للوصول إلى الطلبات والإعدادات.</p><div className="profile-hub-links"><Link to="/downloads" onClick={onClose}>تحميل التطبيقات</Link></div><Link className="button button-primary button-wide" to="/customer/login" onClick={onClose}>تسجيل الدخول</Link></section>
+  if (role === 'admin') return <section className="profile-hub" role="dialog" aria-label="حساب الإدارة"><div className="profile-hub-head"><div className="profile-hub-avatar"><UserRound size={20} /></div><div><strong>حساب الإدارة</strong><small>الوصول السريع</small></div><button type="button" className="icon-button" onClick={onClose} aria-label="إغلاق"><X size={18} /></button></div><nav className="profile-hub-links" aria-label="روابط الإدارة"><Link to="/admin/overview" onClick={onClose}>الرئيسية</Link><Link to="/admin/operations" onClick={onClose}>الطلبات والإسناد</Link><Link to="/admin/accounts" onClick={onClose}>العملاء والفنيون</Link><Link to="/admin/notifications" onClick={onClose}>الإشعارات</Link><Link to="/admin/settings" onClick={onClose}>إعدادات المنصة</Link></nav><button type="button" className="profile-hub-signout" onClick={onSignOut} disabled={signingOut}>{signingOut ? 'جارٍ تسجيل الخروج…' : 'تسجيل الخروج'}</button></section>
   const base = role === 'provider' ? '/provider' : '/customer'
   return <section className="profile-hub" role="dialog" aria-label="ملف الحساب">
     <div className="profile-hub-head"><div className="profile-hub-avatar"><UserRound size={20} /></div><div><strong>{role === 'provider' ? 'حساب الفني' : 'حساب العميل'}</strong><small>الوصول السريع</small></div><button type="button" className="icon-button" onClick={onClose} aria-label="إغلاق"><X size={18} /></button></div>
@@ -51,7 +52,7 @@ export function Shell({ children, theme, onThemeChange }: { children: ReactNode;
   const [appInstalled, setAppInstalled] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const location = useLocation()
-  const role = location.pathname.startsWith('/provider') ? 'provider' : location.pathname.startsWith('/customer') ? 'customer' : null
+  const role = location.pathname.startsWith('/provider') ? 'provider' : location.pathname.startsWith('/customer') ? 'customer' : location.pathname.startsWith('/admin') ? 'admin' : null
   const inWorkspace = Boolean(role || location.pathname.startsWith('/admin'))
 
   useEffect(() => setProfileOpen(false), [location.pathname])
@@ -77,11 +78,11 @@ export function Shell({ children, theme, onThemeChange }: { children: ReactNode;
   const handleSignOut = async () => { setSigningOut(true); try { await signOutAccount(); window.location.assign('/') } catch { setSigningOut(false) } }
   const nav = [{ to: '/', label: 'الرئيسية' }, { to: '/services', label: 'الخدمات' }, { to: '/about', label: 'عن هوم سيرفس' }, { to: '/book', label: 'اطلب خدمة' }, { to: '/customer/login', label: 'دخول العملاء' }, { to: '/provider/login', label: 'دخول الفنيين' }]
 
-  return <div className="app-shell">
+  return <div className={`app-shell ${inWorkspace ? 'workspace-shell' : ''}`}>
     <header className="topbar"><div className="topbar-inner">
       <Link to="/" className="brand-link" aria-label="هوم سيرفس — الرئيسية"><BrandMark /></Link>
       {!inWorkspace && <nav id="main-site-navigation" className="main-nav" aria-label="روابط الموقع">{nav.map((item) => <NavLink key={item.to} to={item.to} className={({ isActive }) => isActive ? 'active' : ''}>{item.label}</NavLink>)}<NavLink to="/downloads" className={({ isActive }) => isActive ? 'active' : ''}>تحميل التطبيقات</NavLink></nav>}
-      <div className="topbar-actions">{!inWorkspace && installPrompt && !appInstalled && <button type="button" className="button button-small install-app-button" onClick={() => void installApp()}>تثبيت التطبيق</button>}<Link className="icon-button hide-mobile" aria-label="بحث" to="/services"><Search size={18} /></Link><Link className="icon-button" aria-label="مركز الإشعارات" title="مركز الإشعارات" to={location.pathname.startsWith('/admin') ? '/admin/notifications' : role === 'provider' ? '/provider/notifications' : '/customer/notifications'}><Bell size={18} /></Link><button type="button" className="icon-button" onClick={onThemeChange} aria-label="تغيير المظهر">{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button><button type="button" className="icon-button profile-trigger" onClick={() => setProfileOpen((value) => !value)} aria-label="الحساب" aria-expanded={profileOpen}><UserRound size={19} /></button><Link to="/book" className="button button-small hide-mobile">ابدأ طلبك</Link></div>
+      <div className="topbar-actions">{!inWorkspace && installPrompt && !appInstalled && <button type="button" className="button button-small install-app-button" onClick={() => void installApp()}>تثبيت التطبيق</button>}<Link className="icon-button hide-mobile" aria-label="بحث" to="/services"><Search size={18} /></Link><Link className="icon-button" aria-label="مركز الإشعارات" title="مركز الإشعارات" to={role === 'admin' ? '/admin/notifications' : role === 'provider' ? '/provider/notifications' : '/customer/notifications'}><Bell size={18} /></Link><button type="button" className="icon-button hide-mobile" onClick={onThemeChange} aria-label="تغيير المظهر">{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</button><button type="button" className="icon-button mobile-menu-trigger" onClick={() => setProfileOpen((value) => !value)} aria-label="فتح القائمة" aria-expanded={profileOpen}><Menu size={21} /></button><button type="button" className="icon-button profile-trigger hide-mobile" onClick={() => setProfileOpen((value) => !value)} aria-label="الحساب" aria-expanded={profileOpen}><UserRound size={19} /></button><Link to="/book" className="button button-small hide-mobile">ابدأ طلبك</Link></div>
     </div></header>
     {profileOpen && <div className="profile-hub-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setProfileOpen(false) }}><ProfileHub role={role} onClose={() => setProfileOpen(false)} onSignOut={() => void handleSignOut()} signingOut={signingOut} /></div>}
     <main>{children}</main>
