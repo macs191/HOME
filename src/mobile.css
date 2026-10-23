@@ -378,3 +378,30 @@ body:has(.install-guide-overlay) { overflow: hidden; }
   .dashboard-top h1 { margin-bottom: 4px; }
   .section-alert-banner { margin-bottom: 10px; }
 }
+
+/* Logged-in mobile workspaces use one top menu instead of repeated nav bars. */
+.mobile-menu-trigger { display: none; }
+@media (max-width: 760px) {
+  .mobile-menu-trigger { display: grid; }
+  .mobile-bottom-nav { display: none !important; }
+  .dashboard-page .dashboard-nav { display: none !important; }
+  .admin-top-nav { display: none !important; }
+  .admin-workspace .dashboard-shell { display: block; }
+  .admin-workspace .dashboard-content { width: 100%; }
+  .dashboard-page { padding-top: 18px; padding-bottom: 18px; }
+  .dashboard-top { margin-bottom: 12px; }
+  .dashboard-top h1 { margin-bottom: 4px; }
+  .section-alert-banner { margin-bottom: 10px; }
+}
+
+/* Authenticated workspaces start directly with dashboard content. */
+.workspace-shell > .topbar { display: none; }
+.admin-workspace > .dashboard-top { display: none; }
+@media (max-width: 760px) {
+  .admin-workspace .dashboard-nav { display: block !important; width: 100%; margin-bottom: 12px; }
+  .admin-workspace .dashboard-nav-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; max-height: 250px; overflow: auto; }
+  .admin-workspace .dashboard-nav-links a { display: flex; min-height: 40px; padding: 8px 9px; font-size: 11px; }
+  .admin-workspace .dashboard-nav .nav-user { margin-bottom: 8px; }
+  .admin-workspace .dashboard-nav .nav-bottom { display: flex; margin-top: 8px; padding-top: 8px; }
+  .admin-workspace .dashboard-page { padding-top: 8px; }
+}
