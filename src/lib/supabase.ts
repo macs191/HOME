@@ -259,6 +259,7 @@ function authMessage(error: { message?: string }) {
   const message = error.message?.toLowerCase() ?? ''
   if (message.includes('invalid login credentials')) return 'البريد الإلكتروني أو كلمة المرور غير صحيحة.'
   if (message.includes('email not confirmed')) return 'لم يكتمل تفعيل البريد الإلكتروني. تحقق من بريدك ثم حاول مجددًا.'
+  if (message.includes('redirect_uri_mismatch') || message.includes('redirect uri mismatch')) return 'إعداد Google غير مكتمل: أضف رابط Supabase التالي حرفيًا في Authorized redirect URIs داخل Google Cloud: https://ojivulfurjjsskqzghfb.supabase.co/auth/v1/callback، ثم أضف رابط موقع التطبيق /auth/callback في Supabase Auth > URL Configuration.'
   if (message.includes('provider is not enabled') || message.includes('unsupported provider')) return 'الدخول بحساب Google غير متاح الآن. استخدم البريد الإلكتروني أو حاول لاحقًا.'
   if (message.includes('developer_error') || message.includes('provider configuration') || message.includes('provider_configuration_error') || message.includes('10:') || message === '10' || message.includes('12500')) return 'إعداد Google للتطبيق غير متطابق مع حزمة Android الحالية. احذف النسخة القديمة وثبّت آخر APK الموقّع، ثم جرّب مجددًا.'
   if (message.includes('invalid jwt') || message.includes('invalid claim') || message.includes('invalid audience') || message.includes('audience')) return 'وصل رمز Google، لكن Supabase رفضه. يلزم مطابقة Web Client ID في إعداد Google داخل Supabase مع التطبيق.'
