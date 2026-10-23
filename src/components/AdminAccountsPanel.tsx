@@ -22,6 +22,7 @@ const docLabels: Record<string, string> = { cv: 'السيرة الذاتية', i
 const statusLabels: Record<string, string> = { pending: 'قيد المراجعة', approved: 'معتمد', rejected: 'مرفوض', suspended: 'موقوف', completed: 'مكتمل', assigned: 'مسند', in_progress: 'جارٍ التنفيذ', cancelled: 'ملغي', paid: 'مدفوع', unpaid: 'غير مدفوع' }
 
 export function AdminAccountsPanel() {
+  const [accountView, setAccountView] = useState<'list' | 'details'>('list')
   const [accounts, setAccounts] = useState<Account[]>([])
   const [selected, setSelected] = useState<Account | null>(null)
   const [records, setRecords] = useState<Records | null>(null)
@@ -59,7 +60,7 @@ export function AdminAccountsPanel() {
   useEffect(() => { let active = true; getProviderSpecialtyOptions().then(({ data, error }) => { if (active) { if (error) setError('تعذر تحميل قائمة الخدمات. حاول مرة أخرى.'); else setServiceOptions((data as any[]) ?? []) } }).catch(() => { if (active) setError('تعذر تحميل قائمة الخدمات. حاول مرة أخرى.') }); return () => { active = false } }, [])
 
   const selectAccount = async (account: Account) => {
-    setSelected(account); setRecords(null); setDocUrls({}); setActiveDocument(null); setDetailsLoading(true); setError(''); setMessage('')
+    setSelected(account); setAccountView('details'); setRecords(null); setDocUrls({}); setActiveDocument(null); setDetailsLoading(true); setError(''); setMessage('')
     try {
       const data = await getAdminAccountRecords(account.user_id)
       setRecords(data)
@@ -120,7 +121,7 @@ export function AdminAccountsPanel() {
     try {
       await deleteAdminAccount(selected.user_id)
       setAccounts((current) => current.filter((item) => item.user_id !== selected.user_id))
-      setSelected(null); setRecords(null); setDocUrls({}); setMessage('تم حذف الحساب الفارغ وتوثيق الإجراء. احتُفظ بالحسابات ذات سجل تشغيلي عبر الإيقاف بدل الحذف.')
+      setSelected(null); setAccountView('list'); setRecords(null); setDocUrls({}); setMessage('تم حذف الحساب الفارغ وتوثيق الإجراء. احتُفظ بالحسابات ذات سجل تشغيلي عبر الإيقاف بدل الحذف.')
       void loadAccounts()
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'تعذر حذف الحساب.') }
     finally { setAccountActionBusy(false) }
@@ -149,7 +150,7 @@ export function AdminAccountsPanel() {
     finally { setNotificationBusy(false) }
   }
 
-  return <div className="admin-accounts">
+  return <div className={`admin-accounts accounts-view-${accountView}`}><nav className="admin-inner-strip" aria-label="أقسام الحسابات"><span>إدارة الحسابات</span><button type="button" className={accountView === 'list' ? 'active' : ''} onClick={() => setAccountView('list')}>قائمة العملاء والفنيين</button><button type="button" className={accountView === 'details' ? 'active' : ''} onClick={() => selected && setAccountView('details')} disabled={!selected}>تفاصيل الحساب</button></nav>
     <div className="panel admin-accounts-toolbar"><div><span className="eyebrow">إدارة الحسابات</span><h2>العملاء والفنيون</h2><p className="muted">اعرض بيانات الحساب وسجل الطلبات، راجع مستندات الفني الخاصة، وحدّث البيانات أو نزّلها.</p></div><div className="admin-account-actions"><a className="button button-secondary button-small" href="/customer/login?mode=signup">إنشاء حساب عميل</a><a className="button button-secondary button-small" href="/provider/login?mode=signup">تسجيل فني جديد</a><button type="button" className="button button-primary button-small" onClick={exportAccounts} disabled={!accounts.length}><Download size={15} />تنزيل قائمة الحسابات</button></div></div>
     <div className="accounts-layout">
       <section className="panel accounts-list-panel">
