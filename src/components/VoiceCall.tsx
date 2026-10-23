@@ -6,7 +6,7 @@ type CallState = 'idle' | 'calling' | 'incoming' | 'connected'
 type Signal = { callId: string; from: string; to: string; offer?: RTCSessionDescriptionInit; answer?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit; name?: string }
 const rtcConfig: RTCConfiguration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] }
 
-export function VoiceCall({ bookingId }: { bookingId: string }) {
+export function VoiceCall({ bookingId, targetRole }: { bookingId: string; targetRole?: 'admin' | 'provider' | 'customer' }) {
   const [userId, setUserId] = useState('')
   const [participants, setParticipants] = useState<BookingCallParticipant[]>([])
   const [targetId, setTargetId] = useState('')
@@ -53,7 +53,7 @@ export function VoiceCall({ bookingId }: { bookingId: string }) {
       const result = await getBookingCallParticipants(bookingId)
       if (!active) return
       if (result.error) { setMessage('تعذر تجهيز أطراف الاتصال الصوتي.'); return }
-      const rows = (result.data ?? []).filter((item) => item.user_id !== auth.user!.id)
+      const rows = (result.data ?? []).filter((item) => item.user_id !== auth.user!.id && (!targetRole || item.participant_role === targetRole))
       setParticipants(rows); setTargetId(rows[0]?.user_id ?? '')
       channel = supabase.channel(`voice-call:${bookingId}`, { config: { broadcast: { self: false }, private: true } })
       channel.on('broadcast', { event: 'voice-invite' }, ({ payload }: { payload: Signal }) => { if (payload.to !== auth.user!.id || stateRef.current !== 'idle') return; callIdRef.current = payload.callId; currentTargetRef.current = payload.from; setIncoming(payload); setState('incoming'); stateRef.current = 'incoming' })
@@ -66,7 +66,7 @@ export function VoiceCall({ bookingId }: { bookingId: string }) {
       channel.subscribe((status: string) => { if (status === 'SUBSCRIBED') channelRef.current = channel })
     })().catch(() => setMessage('تعذر تهيئة الاتصال الصوتي.'))
     return () => { active = false; void channel?.unsubscribe(); reset() }
-  }, [bookingId])
+  }, [bookingId, targetRole])
 
   useEffect(() => { if (state !== 'connected') return; const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000); return () => window.clearInterval(timer) }, [state])
 

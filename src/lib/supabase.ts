@@ -862,10 +862,10 @@ export async function advanceProviderBooking(bookingId: string) {
   return data
 }
 
-export async function submitProviderQuote(bookingId: string, amount: number, note: string) {
+export async function submitProviderQuote(bookingId: string, amount: number, note: string, paymentMethod: 'cash' | 'bank_transfer' = 'cash') {
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
-  const { data, error } = await supabase.rpc('provider_submit_quote_safe', { p_booking_id: bookingId, p_amount: amount, p_note: note })
-  if (error) throw actionError(error, 'تعذر إرسال السعر إلى الإدارة. راجع حالة المهمة وحاول مجددًا.')
+  const { data, error } = await supabase.rpc('provider_submit_quote_auto_safe', { p_booking_id: bookingId, p_amount: amount, p_note: note, p_payment_method: paymentMethod })
+  if (error) throw actionError(error, 'تعذر اعتماد السعر وإصدار الفاتورة. راجع حالة المهمة وحاول مجددًا.')
   return data
 }
 
