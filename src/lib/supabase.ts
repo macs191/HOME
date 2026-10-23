@@ -1252,3 +1252,9 @@ export async function getActiveAdminCallParticipants() {
   if (!supabase) return { data: [], error: new Error('الاتصال المباشر غير متاح في وضع المعاينة.') }
   return await supabase.rpc('get_active_admin_call_participants') as { data: BookingCallParticipant[] | null; error: any }
 }
+
+export async function getAgoraRtcToken(channelName: string, uid: number) {
+  if (!supabase) return { data: null, error: new Error('Agora غير متاحة في وضع المعاينة.') }
+  const result = await supabase.functions.invoke<{ appId: string; token: string; channelName: string; uid: number }>('agora-token', { body: { channelName, uid } })
+  return { data: result.data, error: result.error }
+}
