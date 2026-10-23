@@ -14,6 +14,7 @@ export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetN
   const [incoming, setIncoming] = useState<Signal | null>(null)
   const [muted, setMuted] = useState(false)
   const [message, setMessage] = useState('')
+  const [channelReady, setChannelReady] = useState(false)
   const [seconds, setSeconds] = useState(0)
   const channelRef = useRef<any>(null)
   const pcRef = useRef<RTCPeerConnection | null>(null)
@@ -30,7 +31,8 @@ export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetN
   const createPeer = async (signal: Signal, caller: boolean) => {
     const pc = new RTCPeerConnection(rtcConfig)
     pcRef.current = pc
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false })
+    let stream: MediaStream
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false }) } catch { setMessage('اسمح بالوصول إلى الميكروفون من إعدادات المتصفح أو التطبيق ثم حاول مرة أخرى.'); reset(); throw new Error('microphone_permission_denied') }
     localStreamRef.current = stream
     stream.getTracks().forEach((track) => pc.addTrack(track, stream))
     pc.ontrack = (event) => { if (remoteAudioRef.current) { remoteAudioRef.current.srcObject = event.streams[0]; void remoteAudioRef.current.play().catch(() => undefined) } }
@@ -75,20 +77,20 @@ export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetN
       channel.on('broadcast', { event: 'voice-answer' }, async ({ payload }: { payload: Signal }) => { if (payload.to !== auth.user!.id || payload.callId !== callIdRef.current || !pcRef.current) return; await pcRef.current.setRemoteDescription(payload.answer!); setState('connected'); stateRef.current = 'connected' })
       channel.on('broadcast', { event: 'voice-ice' }, async ({ payload }: { payload: Signal }) => { if (payload.to !== auth.user!.id || payload.callId !== callIdRef.current || !pcRef.current || !payload.candidate) return; try { await pcRef.current.addIceCandidate(payload.candidate) } catch { /* candidate قد يصل قبل الوصف */ } })
       channel.on('broadcast', { event: 'voice-ended' }, ({ payload }: { payload: Signal }) => { if (payload.to === auth.user!.id && payload.callId === callIdRef.current) { setMessage('أنهى الطرف الآخر المكالمة.'); reset() } })
-      channel.subscribe((status: string) => { if (status === 'SUBSCRIBED') channelRef.current = channel })
+      channel.subscribe((status: string) => { if (status === 'SUBSCRIBED') { channelRef.current = channel; setChannelReady(true); setMessage('') } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { setChannelReady(false); setMessage('تعذر فتح قناة الاتصال. تحقق من تسجيل الدخول واتصال الإنترنت.') } })
     })().catch(() => setMessage('تعذر تهيئة الاتصال الصوتي.'))
-    return () => { active = false; void channel?.unsubscribe(); reset() }
+    return () => { active = false; setChannelReady(false); channelRef.current = null; void channel?.unsubscribe(); reset() }
   }, [bookingId, targetRole, directTargetId, directTargetName, directAdminId, fixedTargetLabel, incomingOnly])
 
   useEffect(() => { if (state !== 'connected') return; const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000); return () => window.clearInterval(timer) }, [state])
 
   const call = async () => {
-    if (!targetId || !channelRef.current || state !== 'idle') return
-    setMessage(''); callIdRef.current = crypto.randomUUID(); currentTargetRef.current = targetId; setState('calling'); stateRef.current = 'calling'
+    if (!targetId || !channelRef.current || !channelReady || state !== 'idle') { if (!channelReady) setMessage('انتظر لحظة حتى يتم تجهيز الاتصال…'); return }
+    setMessage('جارٍ إرسال طلب الاتصال…'); callIdRef.current = crypto.randomUUID(); currentTargetRef.current = targetId; setState('calling'); stateRef.current = 'calling'
     const target = participants.find((item) => item.user_id === targetId)
     await send('voice-invite', { callId: callIdRef.current, from: userId, to: targetId, name: target?.display_name ?? 'مستخدم' })
   }
-  const accept = async () => { if (!incoming) return; setMessage(''); setIncoming(null); setState('calling'); stateRef.current = 'calling'; await send('voice-accepted', { callId: incoming.callId, from: userId, to: incoming.from }); await createPeer(incoming, false) }
+  const accept = async () => { if (!incoming) return; setMessage('جارٍ تشغيل الميكروفون…'); setIncoming(null); setState('calling'); stateRef.current = 'calling'; try { await send('voice-accepted', { callId: incoming.callId, from: userId, to: incoming.from }); await createPeer(incoming, false) } catch { setMessage('تعذر تشغيل المكالمة. تحقق من صلاحية الميكروفون.') } }
   const reject = async () => { if (incoming) await send('voice-rejected', { callId: incoming.callId, from: userId, to: incoming.from }); reset() }
   const hangup = async () => { if (callIdRef.current && currentTargetRef.current) await send('voice-ended', { callId: callIdRef.current, from: userId, to: currentTargetRef.current }); reset() }
   const toggleMute = () => { const next = !muted; localStreamRef.current?.getAudioTracks().forEach((track) => { track.enabled = !next }); setMuted(next) }
@@ -96,5 +98,5 @@ export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetN
   const formatTime = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
 
   if (incomingOnly && state === 'idle') return null
-  return <div className="voice-call"><audio ref={remoteAudioRef} autoPlay /><div className="voice-call-actions">{state === 'idle' && !incomingOnly ? <>{!fixedTargetLabel && <select value={targetId} onChange={(event) => setTargetId(event.target.value)} aria-label="اختر طرف الاتصال"><option value="">اختر طرف الاتصال</option>{participants.map((item) => <option key={item.user_id} value={item.user_id}>{item.display_name} · {item.participant_role === 'admin' ? 'الإدارة' : item.participant_role === 'provider' ? 'فني' : 'عميل'}</option>)}</select>}<button type="button" className="button button-secondary button-small" onClick={() => void call()} disabled={!targetId || !channelRef.current}><Phone size={15} /> {fixedTargetLabel ?? 'اتصال صوتي'}</button></> : state === 'incoming' ? <div className="voice-incoming"><PhoneCall size={17} /><strong>{incoming?.name ?? 'مكالمة واردة'}</strong><button type="button" className="button button-primary button-small" onClick={() => void accept()}>قبول</button><button type="button" className="button button-danger button-small" onClick={() => void reject()}><PhoneOff size={14} /> رفض</button></div> : <div className="voice-active"><span><Volume2 size={15} /> {state === 'connected' ? `متصل ${formatTime}` : `جارٍ الاتصال بـ ${target?.display_name ?? 'الطرف الآخر'}…`}</span>{state === 'connected' && <button type="button" className="icon-button" onClick={toggleMute} aria-label={muted ? 'تشغيل الميكروفون' : 'كتم الميكروفون'}>{muted ? <MicOff size={16} /> : <Mic size={16} />}</button>}<button type="button" className="button button-danger button-small" onClick={() => void hangup()}><PhoneOff size={14} /> إنهاء</button></div>}</div>{message && <small className="voice-call-message">{message}</small>}</div>
+  return <div className="voice-call"><audio ref={remoteAudioRef} autoPlay /><div className="voice-call-actions">{state === 'idle' && !incomingOnly ? <>{!fixedTargetLabel && <select value={targetId} onChange={(event) => setTargetId(event.target.value)} aria-label="اختر طرف الاتصال"><option value="">اختر طرف الاتصال</option>{participants.map((item) => <option key={item.user_id} value={item.user_id}>{item.display_name} · {item.participant_role === 'admin' ? 'الإدارة' : item.participant_role === 'provider' ? 'فني' : 'عميل'}</option>)}</select>}<button type="button" className="button button-secondary button-small" onClick={() => void call()} disabled={!targetId || !channelReady}><Phone size={15} /> {fixedTargetLabel ?? 'اتصال صوتي'}</button></> : state === 'incoming' ? <div className="voice-incoming"><PhoneCall size={17} /><strong>{incoming?.name ?? 'مكالمة واردة'}</strong><button type="button" className="button button-primary button-small" onClick={() => void accept()}>قبول</button><button type="button" className="button button-danger button-small" onClick={() => void reject()}><PhoneOff size={14} /> رفض</button></div> : <div className="voice-active"><span><Volume2 size={15} /> {state === 'connected' ? `متصل ${formatTime}` : `جارٍ الاتصال بـ ${target?.display_name ?? 'الطرف الآخر'}…`}</span>{state === 'connected' && <button type="button" className="icon-button" onClick={toggleMute} aria-label={muted ? 'تشغيل الميكروفون' : 'كتم الميكروفون'}>{muted ? <MicOff size={16} /> : <Mic size={16} />}</button>}<button type="button" className="button button-danger button-small" onClick={() => void hangup()}><PhoneOff size={14} /> إنهاء</button></div>}</div>{message && <small className="voice-call-message">{message}</small>}</div>
 }

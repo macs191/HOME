@@ -17,7 +17,8 @@ BEGIN
   IF v_target IS NULL OR v_admin IS NULL OR NOT EXISTS (SELECT 1 FROM public.user_roles WHERE user_id=v_admin AND role::text IN ('admin','sub_admin')) THEN RETURN false; END IF;
   RETURN (auth.uid() = v_target) OR (auth.uid() = v_admin AND public.is_admin());
 END; $$;
-REVOKE ALL ON FUNCTION public.can_access_direct_admin_call_topic(text) FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION public.can_access_direct_admin_call_topic(text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.can_access_direct_admin_call_topic(text) TO authenticated;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='realtime' AND tablename='messages' AND policyname='direct_admin_call_select') THEN
