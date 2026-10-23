@@ -83,7 +83,7 @@ export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetN
       setParticipants(rows); setTargetId(rows[0]?.user_id ?? '')
       channel = supabase.channel(topic, { config: { broadcast: { self: false }, private: true } })
       channel.on('broadcast', { event: 'voice-invite' }, ({ payload }: { payload: Signal }) => { if (payload.to !== auth.user!.id || stateRef.current !== 'idle') return; callIdRef.current = payload.callId; currentTargetRef.current = payload.from; setIncoming(payload); setState('incoming'); stateRef.current = 'incoming' })
-      channel.on('broadcast', { event: 'voice-accepted' }, async ({ payload }: { payload: Signal }) => { if (payload.to !== auth.user!.id || payload.callId !== callIdRef.current) return; setState('calling'); stateRef.current = 'calling'; try { await joinAgora(payload.callId) } catch { setMessage('تعذر بدء Agora. تأكد من إعداد AGORA_APP_ID وAGORA_APP_CERTIFICATE.') } })
+      channel.on('broadcast', { event: 'voice-accepted' }, async ({ payload }: { payload: Signal }) => { if (payload.to !== auth.user!.id || payload.callId !== callIdRef.current) return; setState('calling'); stateRef.current = 'calling'; try { await joinAgora(payload.callId) } catch (error) { const code = error instanceof Error ? error.message : ''; setMessage(code === 'agora_not_configured' ? 'Agora غير مهيأة في Supabase. أضف AGORA_APP_ID وAGORA_APP_CERTIFICATE إلى Edge Function Secrets.' : code === 'authentication_required' ? 'انتهت جلسة الدخول. سجّل الدخول من جديد.' : 'تعذر بدء Agora. تحقق من أسرار Agora وصلاحية الميكروفون واتصال الإنترنت.'); reset() } })
       channel.on('broadcast', { event: 'voice-rejected' }, ({ payload }: { payload: Signal }) => { if (payload.to === auth.user!.id && payload.callId === callIdRef.current) { setMessage('لم يتم قبول المكالمة.'); reset() } })
       channel.on('broadcast', { event: 'voice-ended' }, ({ payload }: { payload: Signal }) => { if (payload.to === auth.user!.id && payload.callId === callIdRef.current) { setMessage('أنهى الطرف الآخر المكالمة.'); reset() } })
       channel.subscribe((status: string) => { if (status === 'SUBSCRIBED') { signalChannelRef.current = channel; setChannelReady(true); setMessage('') } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { setChannelReady(false); setMessage('تعذر فتح قناة الاتصال. تحقق من تسجيل الدخول واتصال الإنترنت.') } })
@@ -97,7 +97,7 @@ export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetN
     if (!targetId || !signalChannelRef.current || !channelReady || state !== 'idle') { if (!channelReady) setMessage('انتظر لحظة حتى يتم تجهيز الاتصال…'); return }
     setMessage('جارٍ إرسال طلب الاتصال…'); callIdRef.current = crypto.randomUUID(); currentTargetRef.current = targetId; setState('calling'); stateRef.current = 'calling'
     const target = participants.find((item) => item.user_id === targetId)
-    await send('voice-invite', { callId: callIdRef.current, from: userId, to: targetId, name: target?.display_name ?? 'مستخدم' })
+    try { await send('voice-invite', { callId: callIdRef.current, from: userId, to: targetId, name: target?.display_name ?? 'مستخدم' }) } catch { setMessage('تعذر إرسال طلب الاتصال. تحقق من اتصال Supabase ثم حاول مرة أخرى.'); reset() }
   }
   const accept = async () => {
     if (!incoming) return
@@ -111,8 +111,9 @@ export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetN
   const formatTime = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
 
   if (incomingOnly && state === 'idle') return null
-  return <div className={`voice-call${floating ? ' voice-call-floating' : ''}`} role={floating ? 'dialog' : undefined} aria-label={floating ? 'مكالمة صوتية' : undefined}>
-    {floating && <div className="voice-call-floating-head"><strong>مكالمة صوتية</strong><span>{state === 'connected' ? formatTime : state === 'incoming' ? 'مكالمة واردة' : 'Agora'}</span>{state === 'idle' && <button type="button" className="icon-button" onClick={() => setMessage('يمكنك بدء الاتصال من الزر أدناه.')} aria-label="إغلاق الرسالة"><X size={16} /></button>}</div>}
+  const showFloating = floating && state !== 'idle'
+  return <div className={`voice-call${showFloating ? ' voice-call-floating' : ''}`} role={showFloating ? 'dialog' : undefined} aria-label={showFloating ? 'مكالمة صوتية' : undefined}>
+    {showFloating && <div className="voice-call-floating-head"><strong>مكالمة صوتية</strong><span>{state === 'connected' ? formatTime : state === 'incoming' ? 'مكالمة واردة' : 'Agora'}</span><button type="button" className="icon-button" onClick={() => void hangup()} aria-label="إغلاق شاشة المكالمة"><X size={16} /></button></div>}
     <div className="voice-call-actions">
       {state === 'idle' && !incomingOnly ? <>{!fixedTargetLabel && <select value={targetId} onChange={(event) => setTargetId(event.target.value)} aria-label="اختر طرف الاتصال"><option value="">اختر طرف الاتصال</option>{participants.map((item) => <option key={item.user_id} value={item.user_id}>{item.display_name} · {item.participant_role === 'admin' ? 'الإدارة' : item.participant_role === 'provider' ? 'فني' : 'عميل'}</option>)}</select>}<button type="button" className="button button-secondary button-small" onClick={() => void call()} disabled={!targetId || !channelReady}><Phone size={15} /> {fixedTargetLabel ?? 'اتصال صوتي'}</button></>
       : state === 'incoming' ? <div className="voice-incoming"><PhoneCall size={17} /><strong>{incoming?.name ?? 'مكالمة واردة'}</strong><button type="button" className="button button-primary button-small" onClick={() => void accept()}>قبول</button><button type="button" className="button button-danger button-small" onClick={() => void reject()}><PhoneOff size={14} /> رفض</button></div>
