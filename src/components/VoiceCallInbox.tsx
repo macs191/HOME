@@ -11,5 +11,5 @@ export function VoiceCallInbox({ enabled }: { enabled: boolean }) {
     return () => { active = false }
   }, [enabled])
   if (!enabled) return null
-  return <div className="voice-call-inbox" aria-live="assertive">{admins.map((admin) => <VoiceCall key={admin.user_id} directAdminId={admin.user_id} incomingOnly />)}</div>
+  return <div className="voice-call-inbox" aria-live="assertive">{admins.map((admin) => <VoiceCall key={admin.user_id} directAdminId={admin.user_id} incomingOnly floating />)}</div>
 }
