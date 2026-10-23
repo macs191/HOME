@@ -19,6 +19,7 @@ import { AdminWorkspace } from './components/AdminWorkspace'
 import { StorePage, StoreOrdersPanel } from './components/StorePage'
 import { VoiceAssistant } from './components/VoiceAssistant'
 import { AdminContactPanel } from './components/AdminContactPanel'
+import { VoiceCallInbox } from './components/VoiceCallInbox'
 import { UnifiedOrdersCenter } from './components/UnifiedOrdersCenter'
 import { OrderDialog } from './components/OrderDialog'
 import { DownloadPage } from './components/DownloadPage'
@@ -348,7 +349,7 @@ function ProviderPage() {
     catch (error) { setSpecialtyMessage(error instanceof Error ? error.message : 'تعذر حفظ التخصصات.') }
     finally { setSpecialtyBusy(false) }
   }
-  if (routeSection && !['overview','work-queue','specialties','verification','schedule','ledger','notifications','settings','contact'].includes(routeSection)) return <Navigate to="/provider/overview" replace />
+  if (routeSection && !['overview','work-queue','specialties','verification','schedule','ledger','notifications','settings'].includes(routeSection)) return <Navigate to="/provider/overview" replace />
   if (initialLoading) return <div className="container loading-state">جارٍ تجهيز لوحة الفني…</div>
 
   const onboardingForm = <section className="panel verification-panel provider-onboarding-form"><div className="onboarding-intro"><span className="onboarding-icon"><ShieldCheck size={22} /></span><div><span className="eyebrow">ملف مقدم الخدمة</span><h2>أكمل بيانات التسجيل</h2><p className="muted">لن تظهر الطلبات قبل استكمال البيانات ومراجعتها من الإدارة. الهوية والشهادة محفوظتان بمساحة خاصة، والسيرة الذاتية اختيارية.</p></div></div>
@@ -370,13 +371,12 @@ function ProviderPage() {
   const providerStatus = providerProfile.approval_status === 'approved' ? 'الحساب معتمد' : providerProfile.approval_status === 'rejected' ? 'يلزم تحديث البيانات' : 'قيد مراجعة الإدارة'
   return <DashboardLayout role="provider" eyebrow="لوحة الفني" title="طلباتك أولًا" description="تابع الطلبات المسندة، حدّث حالتها، وأضف ملاحظاتك من مكان واحد.">
     <div className="dashboard-grid provider-dashboard-clean"><div className="dashboard-main">
-      {providerSection === 'overview' && <><AdminContactPanel bookingId={queue[0]?.id} compact /><UnifiedOrdersCenter role="provider" items={queue} loading={false} error={workMessage} onRefresh={() => void refreshProviderData()}><></></UnifiedOrdersCenter>
+      {providerSection === 'overview' && <><AdminContactPanel bookingId={queue.find((item) => !['cancelled', 'completed'].includes(item.status))?.id} compact /><UnifiedOrdersCenter role="provider" items={queue} loading={false} error={workMessage} onRefresh={() => void refreshProviderData()}><></></UnifiedOrdersCenter>
         <div className="provider-kpi-grid"><div className="metric-card"><span className="muted">طلبات حالية</span><strong>{queue.length}</strong></div><div className="metric-card"><span className="muted">الرصيد الحالي</span><strong>{total.toFixed(2)} ر.س</strong></div></div>
         <section className="panel provider-home-queue"><div className="panel-heading"><div><span className="eyebrow">تشغيل اليوم</span><h2>الطلبات المسندة</h2></div><Link className="text-link" to="/provider/work-queue">عرض الكل <ArrowLeft size={15} /></Link></div>{queue.length ? <div className="booking-list">{queue.slice(0, 3).map((item) => <ProviderJobCard key={item.id} item={item} onUpdate={refreshProviderData} onMessage={setWorkMessage} />)}</div> : <EmptyState icon={MessageCircle} title="لا توجد طلبات مسندة" body="ستظهر الطلبات هنا عند إسنادها إليك." />}</section>
       </>}
       {providerSection === 'work-queue' && <><UnifiedOrdersCenter role="provider" items={queue} loading={false} error={workMessage} onRefresh={() => void refreshProviderData()}><></></UnifiedOrdersCenter><div className="panel" id="work-queue"><SectionTitle title="الطلبات" action={<StatusPill>{queue.length} طلبات</StatusPill>} />{workMessage && <div className={workMessage.startsWith('تعذر') ? 'inline-error' : 'success-note'}>{workMessage}</div>}{queue.length ? <div className="booking-list">{queue.map((item) => <ProviderJobCard key={item.id} item={item} onUpdate={refreshProviderData} onMessage={setWorkMessage} />)}</div> : <EmptyState icon={MessageCircle} title="لا توجد طلبات مسندة" body="ستظهر الطلبات هنا عند إسنادها إليك." />}</div></>}
       {providerSection === 'schedule' && <ProviderSchedulePanel />}
-      {providerSection === 'contact' && <AdminContactPanel bookingId={queue[0]?.id} />}
       {providerSection === 'settings' && <AccountSettingsPanel role="provider" />}
       {providerSection === 'notifications' && <NotificationsPanel />}
       {providerSection === 'ledger' && <div className="panel provider-ledger" id="ledger"><SectionTitle title="الأرباح" /><div className="ledger-total"><span>الرصيد الحالي</span><strong>{total.toFixed(2)} ر.س</strong></div>{ledger.length ? ledger.map((item) => <div className="ledger-row" key={item.id}><span>{item.entry_type === 'late_penalty' ? 'خصم تأخير' : item.entry_type === 'earning' ? 'أجر خدمة' : 'تسوية'}</span><strong className={Number(item.amount) < 0 ? 'negative' : 'positive'}>{Number(item.amount).toFixed(2)} ر.س</strong></div>) : <p className="muted">ستظهر الأرباح بعد إتمام أول خدمة.</p>}</div>}
@@ -406,9 +406,9 @@ function safeNextPath(value: string | null) { return value && value.startsWith('
 function DashboardLayout({ role, eyebrow, title, description, children }: { role: Role; eyebrow: string; title: string; description: string; children: React.ReactNode }) {
   const location = useLocation()
   const customerNav = [{ label: 'الرئيسية', icon: Gauge, to: '/customer/overview' }, { label: 'الطلبات', icon: FileText, to: '/customer/orders' }, { label: 'طلبات المنتجات', icon: ShoppingBag, to: '/customer/store-orders' }, { label: 'اطلب خدمة', icon: MapPin, to: '/book' }, { label: 'الإشعارات', icon: MessageCircle, to: '/customer/notifications' }, { label: 'الإعدادات', icon: Settings2, to: '/customer/settings' }]
-  const providerNav = [{ label: 'الرئيسية', icon: Gauge, to: '/provider/overview' }, { label: 'الطلبات', icon: FileText, to: '/provider/work-queue' }, { label: 'التواصل مع الإدارة', icon: MessageCircle, to: '/provider/contact' }, { label: 'الجدول', icon: CalendarDays, to: '/provider/schedule' }, { label: 'الأرباح', icon: WalletCards, to: '/provider/ledger' }, { label: 'الإشعارات', icon: MessageCircle, to: '/provider/notifications' }, { label: 'الإعدادات', icon: Settings2, to: '/provider/settings' }]
+  const providerNav = [{ label: 'الرئيسية', icon: Gauge, to: '/provider/overview' }, { label: 'الطلبات', icon: FileText, to: '/provider/work-queue' }, { label: 'الجدول', icon: CalendarDays, to: '/provider/schedule' }, { label: 'الأرباح', icon: WalletCards, to: '/provider/ledger' }, { label: 'الإشعارات', icon: MessageCircle, to: '/provider/notifications' }, { label: 'الإعدادات', icon: Settings2, to: '/provider/settings' }]
   const nav = role === 'provider' ? providerNav : customerNav
-  return <div className={`container dashboard-page ${role === 'customer' ? 'customer-mobile-dashboard' : ''}`}><div className="dashboard-shell"><aside className="dashboard-nav"><div className="nav-user"><span className="user-avatar"><UserRound size={18} /></span><div><strong>{role === 'provider' ? 'الفني' : 'العميل'}</strong></div></div>{nav.map(({ label, icon: Icon, to }) => <Link className={location.pathname === to ? 'active' : ''} key={label} to={to}><Icon size={17} />{label}</Link>)}<div className="nav-bottom">{role === 'customer' ? <Link to="/book" className="button button-primary button-wide"><Plus size={16} />طلب جديد</Link> : <Link to="/" className="button button-secondary button-wide">العودة للموقع</Link>}</div></aside><div className="dashboard-content">{children}</div></div></div>
+  return <div className={`container dashboard-page ${role === 'customer' ? 'customer-mobile-dashboard' : ''}`}><VoiceCallInbox enabled={role === 'customer' || role === 'provider'} /><div className="dashboard-shell"><aside className="dashboard-nav"><div className="nav-user"><span className="user-avatar"><UserRound size={18} /></span><div><strong>{role === 'provider' ? 'الفني' : 'العميل'}</strong></div></div>{nav.map(({ label, icon: Icon, to }) => <Link className={location.pathname === to ? 'active' : ''} key={label} to={to}><Icon size={17} />{label}</Link>)}<div className="nav-bottom">{role === 'customer' ? <Link to="/book" className="button button-primary button-wide"><Plus size={16} />طلب جديد</Link> : <Link to="/" className="button button-secondary button-wide">العودة للموقع</Link>}</div></aside><div className="dashboard-content">{children}</div></div></div>
 }
 
 export default App

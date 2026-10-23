@@ -1247,3 +1247,8 @@ export async function getBookingCallParticipants(bookingId: string) {
   if (!supabase) return { data: null, error: new Error('الاتصال المباشر غير متاح في وضع المعاينة.') }
   return await supabase.rpc('get_booking_call_participants', { p_booking_id: bookingId }) as { data: BookingCallParticipant[] | null; error: any }
 }
+
+export async function getActiveAdminCallParticipants() {
+  if (!supabase) return { data: [], error: new Error('الاتصال المباشر غير متاح في وضع المعاينة.') }
+  return await supabase.rpc('get_active_admin_call_participants') as { data: BookingCallParticipant[] | null; error: any }
+}

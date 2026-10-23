@@ -6,7 +6,7 @@ type CallState = 'idle' | 'calling' | 'incoming' | 'connected'
 type Signal = { callId: string; from: string; to: string; offer?: RTCSessionDescriptionInit; answer?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit; name?: string }
 const rtcConfig: RTCConfiguration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] }
 
-export function VoiceCall({ bookingId, targetRole }: { bookingId: string; targetRole?: 'admin' | 'provider' | 'customer' }) {
+export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetName, directAdminId, fixedTargetLabel, incomingOnly = false }: { bookingId?: string; targetRole?: 'admin' | 'provider' | 'customer'; directTargetId?: string; directTargetName?: string; directAdminId?: string; fixedTargetLabel?: string; incomingOnly?: boolean }) {
   const [userId, setUserId] = useState('')
   const [participants, setParticipants] = useState<BookingCallParticipant[]>([])
   const [targetId, setTargetId] = useState('')
@@ -50,12 +50,24 @@ export function VoiceCall({ bookingId, targetRole }: { bookingId: string; target
       const auth = await getAuthState(); if (!active || !auth.user) return
       if (!supabase) throw new Error('الاتصال المباشر غير متاح في وضع المعاينة.')
       setUserId(auth.user.id)
-      const result = await getBookingCallParticipants(bookingId)
-      if (!active) return
-      if (result.error) { setMessage('تعذر تجهيز أطراف الاتصال الصوتي.'); return }
-      const rows = (result.data ?? []).filter((item) => item.user_id !== auth.user!.id && (!targetRole || item.participant_role === targetRole))
+      let rows: BookingCallParticipant[] = []
+      let topic = ''
+      if (directTargetId) {
+        rows = [{ user_id: directTargetId, display_name: directTargetName ?? 'الحساب', participant_role: targetRole ?? 'customer' }]
+        topic = `voice-direct:${directTargetId}:${auth.user.id}`
+      } else if (directAdminId) {
+        rows = [{ user_id: directAdminId, display_name: 'الإدارة', participant_role: 'admin' }]
+        topic = `voice-direct:${auth.user.id}:${directAdminId}`
+      } else if (bookingId) {
+        const result = await getBookingCallParticipants(bookingId)
+        if (!active) return
+        if (result.error) { setMessage('تعذر تجهيز أطراف الاتصال الصوتي.'); return }
+        rows = (result.data ?? []).filter((item) => item.user_id !== auth.user!.id && (!targetRole || item.participant_role === targetRole))
+        topic = `voice-call:${bookingId}`
+      }
+      if (!topic) { setMessage('لا تتوفر قناة اتصال آمنة لهذا الحساب.'); return }
       setParticipants(rows); setTargetId(rows[0]?.user_id ?? '')
-      channel = supabase.channel(`voice-call:${bookingId}`, { config: { broadcast: { self: false }, private: true } })
+      channel = supabase.channel(topic, { config: { broadcast: { self: false }, private: true } })
       channel.on('broadcast', { event: 'voice-invite' }, ({ payload }: { payload: Signal }) => { if (payload.to !== auth.user!.id || stateRef.current !== 'idle') return; callIdRef.current = payload.callId; currentTargetRef.current = payload.from; setIncoming(payload); setState('incoming'); stateRef.current = 'incoming' })
       channel.on('broadcast', { event: 'voice-accepted' }, async ({ payload }: { payload: Signal }) => { if (payload.to !== auth.user!.id || payload.callId !== callIdRef.current) return; setState('calling'); stateRef.current = 'calling'; await createPeer(payload, true) })
       channel.on('broadcast', { event: 'voice-rejected' }, ({ payload }: { payload: Signal }) => { if (payload.to === auth.user!.id && payload.callId === callIdRef.current) { setMessage('لم يتم قبول المكالمة.'); reset() } })
@@ -66,7 +78,7 @@ export function VoiceCall({ bookingId, targetRole }: { bookingId: string; target
       channel.subscribe((status: string) => { if (status === 'SUBSCRIBED') channelRef.current = channel })
     })().catch(() => setMessage('تعذر تهيئة الاتصال الصوتي.'))
     return () => { active = false; void channel?.unsubscribe(); reset() }
-  }, [bookingId, targetRole])
+  }, [bookingId, targetRole, directTargetId, directTargetName, directAdminId, fixedTargetLabel, incomingOnly])
 
   useEffect(() => { if (state !== 'connected') return; const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000); return () => window.clearInterval(timer) }, [state])
 
@@ -83,5 +95,6 @@ export function VoiceCall({ bookingId, targetRole }: { bookingId: string; target
   const target = participants.find((item) => item.user_id === targetId)
   const formatTime = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
 
-  return <div className="voice-call"><audio ref={remoteAudioRef} autoPlay /><div className="voice-call-actions">{state === 'idle' ? <><select value={targetId} onChange={(event) => setTargetId(event.target.value)} aria-label="اختر طرف الاتصال"><option value="">اختر طرف الاتصال</option>{participants.map((item) => <option key={item.user_id} value={item.user_id}>{item.display_name} · {item.participant_role === 'admin' ? 'الإدارة' : item.participant_role === 'provider' ? 'فني' : 'عميل'}</option>)}</select><button type="button" className="button button-secondary button-small" onClick={() => void call()} disabled={!targetId || !channelRef.current}><Phone size={15} /> اتصال صوتي</button></> : state === 'incoming' ? <div className="voice-incoming"><PhoneCall size={17} /><strong>{incoming?.name ?? 'مكالمة واردة'}</strong><button type="button" className="button button-primary button-small" onClick={() => void accept()}>قبول</button><button type="button" className="button button-danger button-small" onClick={() => void reject()}><PhoneOff size={14} /> رفض</button></div> : <div className="voice-active"><span><Volume2 size={15} /> {state === 'connected' ? `متصل ${formatTime}` : `جارٍ الاتصال بـ ${target?.display_name ?? 'الطرف الآخر'}…`}</span>{state === 'connected' && <button type="button" className="icon-button" onClick={toggleMute} aria-label={muted ? 'تشغيل الميكروفون' : 'كتم الميكروفون'}>{muted ? <MicOff size={16} /> : <Mic size={16} />}</button>}<button type="button" className="button button-danger button-small" onClick={() => void hangup()}><PhoneOff size={14} /> إنهاء</button></div>}</div>{message && <small className="voice-call-message">{message}</small>}</div>
+  if (incomingOnly && state === 'idle') return null
+  return <div className="voice-call"><audio ref={remoteAudioRef} autoPlay /><div className="voice-call-actions">{state === 'idle' && !incomingOnly ? <>{!fixedTargetLabel && <select value={targetId} onChange={(event) => setTargetId(event.target.value)} aria-label="اختر طرف الاتصال"><option value="">اختر طرف الاتصال</option>{participants.map((item) => <option key={item.user_id} value={item.user_id}>{item.display_name} · {item.participant_role === 'admin' ? 'الإدارة' : item.participant_role === 'provider' ? 'فني' : 'عميل'}</option>)}</select>}<button type="button" className="button button-secondary button-small" onClick={() => void call()} disabled={!targetId || !channelRef.current}><Phone size={15} /> {fixedTargetLabel ?? 'اتصال صوتي'}</button></> : state === 'incoming' ? <div className="voice-incoming"><PhoneCall size={17} /><strong>{incoming?.name ?? 'مكالمة واردة'}</strong><button type="button" className="button button-primary button-small" onClick={() => void accept()}>قبول</button><button type="button" className="button button-danger button-small" onClick={() => void reject()}><PhoneOff size={14} /> رفض</button></div> : <div className="voice-active"><span><Volume2 size={15} /> {state === 'connected' ? `متصل ${formatTime}` : `جارٍ الاتصال بـ ${target?.display_name ?? 'الطرف الآخر'}…`}</span>{state === 'connected' && <button type="button" className="icon-button" onClick={toggleMute} aria-label={muted ? 'تشغيل الميكروفون' : 'كتم الميكروفون'}>{muted ? <MicOff size={16} /> : <Mic size={16} />}</button>}<button type="button" className="button button-danger button-small" onClick={() => void hangup()}><PhoneOff size={14} /> إنهاء</button></div>}</div>{message && <small className="voice-call-message">{message}</small>}</div>
 }
