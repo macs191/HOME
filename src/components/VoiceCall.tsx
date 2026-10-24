@@ -46,6 +46,11 @@ export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetN
     if (result.error || !result.data) throw new Error(result.error?.message || 'agora_token_failed')
     const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
     agoraClientRef.current = client
+    const renewToken = async () => {
+      const renewed = await getAgoraRtcToken(channelName, uid)
+      if (renewed.error || !renewed.data) throw renewed.error ?? new Error('agora_token_failed')
+      await client.renewToken(renewed.data.token)
+    }
     client.on('user-published', async (user: any, mediaType: 'audio' | 'video') => {
       if (mediaType !== 'audio') return
       await client.subscribe(user, 'audio')
@@ -54,6 +59,8 @@ export function VoiceCall({ bookingId, targetRole, directTargetId, directTargetN
     })
     client.on('user-unpublished', () => { setMessage('توقف صوت الطرف الآخر مؤقتًا.') })
     client.on('user-left', () => { setMessage('غادر الطرف الآخر المكالمة.'); reset() })
+    client.on('token-privilege-will-expire', () => { void renewToken().catch(() => setMessage('انتهت صلاحية مكالمة Agora. أعد الاتصال من فضلك.')) })
+    client.on('token-privilege-did-expire', () => { setMessage('انتهت صلاحية مكالمة Agora.'); reset() })
     await client.join(result.data.appId, result.data.channelName, result.data.token, result.data.uid)
     const track = await AgoraRTC.createMicrophoneAudioTrack({ encoderConfig: 'speech_low_quality' })
     localTrackRef.current = track

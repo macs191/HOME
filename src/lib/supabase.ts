@@ -1255,7 +1255,7 @@ export async function getActiveAdminCallParticipants() {
 
 export async function getAgoraRtcToken(channelName: string, uid: number) {
   if (!supabase) return { data: null, error: new Error('Agora غير متاحة في وضع المعاينة.') }
-  const result = await supabase.functions.invoke<{ appId: string; token: string; channelName: string; uid: number }>('agora-token', { body: { channelName, uid } })
+  const result = await supabase.functions.invoke<{ appId: string; token: string; channelName: string; uid: number; expiresIn: number; expiresAt: number }>('agora-token', { body: { channelName, uid } })
   if (result.error) {
     let code = result.error.message || 'agora_token_failed'
     try { const body = await (result.error as any).context?.json(); if (body?.error) code = body.error } catch { /* لا يتوفر جسم الخطأ أحيانًا */ }

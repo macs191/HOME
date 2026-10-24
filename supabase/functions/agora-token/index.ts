@@ -1,7 +1,7 @@
 // @ts-ignore Supabase Edge Runtime resolves remote imports at deploy time.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-// Agora documents this package as the AccessToken2 builder for RTC channels.
-import { RtcTokenBuilder, RtcRole } from 'npm:agora-token@2.0.7'
+// Official Agora AccessToken2 builder for RTC channels.
+import { RtcRole, RtcTokenBuilder } from 'npm:agora-token@2.0.7'
 
 declare const Deno: { env: { get(name: string): string | undefined }; serve(handler: (request: Request) => Response | Promise<Response>): void }
 
@@ -40,7 +40,23 @@ Deno.serve(async (request) => {
   if (!/^[a-zA-Z0-9!#$%&()+\-:;<=.?@\[\]^_{}|~,]{1,64}$/.test(channelName)) return json(origin, { error: 'invalid_channel_name' }, 400)
   if (!Number.isSafeInteger(uid) || uid <= 0 || uid > 2147483647) return json(origin, { error: 'invalid_uid' }, 400)
 
-  const ttl = 3600
-  const token = RtcTokenBuilder.buildTokenWithUid(appId, appCertificate, channelName, uid, RtcRole.PUBLISHER, ttl, ttl)
-  return json(origin, { appId, token, channelName, uid, expiresIn: ttl, userId: authData.user.id })
+  // AccessToken2 uses one token lifetime plus an explicit lifetime for each
+  // RTC privilege. Voice calls publish audio in Communication mode.
+  const tokenExpire = 3600
+  const joinChannelPrivilegeExpire = 3600
+  const publishAudioPrivilegeExpire = 3600
+  const publishVideoPrivilegeExpire = 0
+  const publishDataPrivilegeExpire = 0
+  const token = RtcTokenBuilder.buildTokenWithUidAndPrivilege(
+    appId,
+    appCertificate,
+    channelName,
+    uid,
+    tokenExpire,
+    joinChannelPrivilegeExpire,
+    publishAudioPrivilegeExpire,
+    publishVideoPrivilegeExpire,
+    publishDataPrivilegeExpire,
+  )
+  return json(origin, { appId, token, channelName, uid, expiresIn: tokenExpire, expiresAt: Math.floor(Date.now() / 1000) + tokenExpire, userId: authData.user.id })
 })
