@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { ImagePlus, MessageCircle, Send, X } from 'lucide-react'
-import { getAuthState, getBookingAttachmentUrl, getBookingMessages, getMyRole, removeBookingChatPhoto, sendBookingMessage, subscribeToBookingMessages, uploadBookingChatPhoto } from '../lib/supabase'
-import { VoiceCall } from './VoiceCall'
+import { getAuthState, getBookingAttachmentUrl, getBookingMessages, removeBookingChatPhoto, sendBookingMessage, subscribeToBookingMessages, uploadBookingChatPhoto } from '../lib/supabase'
 
 type Message = { id: string; sender_id: string; body: string; attachment_path: string | null; created_at: string }
 const MAX_SOURCE_IMAGE_BYTES = 15 * 1024 * 1024
@@ -11,7 +10,6 @@ export function BookingChat({ bookingId }: { bookingId: string }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [body, setBody] = useState('')
   const [userId, setUserId] = useState('')
-  const [callRole, setCallRole] = useState<'admin' | 'provider' | 'customer' | undefined>(undefined)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -52,8 +50,6 @@ export function BookingChat({ bookingId }: { bookingId: string }) {
       const auth = await getAuthState()
       if (!active) return
       setUserId(auth.user?.id ?? '')
-      const role = await getMyRole()
-      setCallRole(role === 'customer' ? 'admin' : role === 'provider' ? 'customer' : undefined)
       await refreshMessages()
       if (active) dispose = await subscribeToBookingMessages(bookingId, () => { void refreshMessages().catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : 'تعذر تحديث المحادثة.') }) })
     })().catch((reason) => {
@@ -106,7 +102,7 @@ export function BookingChat({ bookingId }: { bookingId: string }) {
   return <section className="booking-chat">
     <button type="button" className="button button-secondary button-small booking-chat-toggle" onClick={() => setOpen((value) => !value)} aria-expanded={open}><MessageCircle size={15} /> {open ? 'إخفاء المحادثة' : 'فتح المحادثة'}</button>
     {open && <div className="booking-chat-panel">
-      <div className="booking-chat-heading"><strong>محادثة الطلب</strong><div className="booking-chat-heading-actions"><VoiceCall bookingId={bookingId} targetRole={callRole} /><button type="button" className="icon-button" onClick={() => setOpen(false)} aria-label="إغلاق المحادثة"><X size={15} /></button></div></div>
+      <div className="booking-chat-heading"><strong>محادثة الطلب</strong><button type="button" className="icon-button" onClick={() => setOpen(false)} aria-label="إغلاق المحادثة"><X size={15} /></button></div>
       <div className="booking-chat-messages" aria-live="polite">{loading ? <p className="muted">جارٍ تحميل الرسائل…</p> : messages.length ? messages.map((item) => <div className={item.sender_id === userId ? 'booking-chat-message own' : 'booking-chat-message'} key={item.id}>
         {item.body && <p>{item.body}</p>}
         {item.attachment_path && (attachmentUrls[item.id] ? <a className="booking-chat-attachment-link" href={attachmentUrls[item.id]} target="_blank" rel="noreferrer"><img className="booking-chat-attachment-image" src={attachmentUrls[item.id]} alt="مرفق صورة في محادثة الطلب" /></a> : <span className="muted">تعذر تحميل صورة المحادثة أو انتهت صلاحية رابطها.</span>)}

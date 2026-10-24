@@ -862,10 +862,10 @@ export async function advanceProviderBooking(bookingId: string) {
   return data
 }
 
-export async function submitProviderQuote(bookingId: string, amount: number, note: string, paymentMethod: 'cash' | 'bank_transfer' = 'cash') {
+export async function submitProviderQuote(bookingId: string, amount: number, note: string) {
   if (!supabase) throw new Error('تعذر إتمام العملية الآن.')
-  const { data, error } = await supabase.rpc('provider_submit_quote_auto_safe', { p_booking_id: bookingId, p_amount: amount, p_note: note, p_payment_method: paymentMethod })
-  if (error) throw actionError(error, 'تعذر اعتماد السعر وإصدار الفاتورة. راجع حالة المهمة وحاول مجددًا.')
+  const { data, error } = await supabase.rpc('provider_submit_quote_safe', { p_booking_id: bookingId, p_amount: amount, p_note: note })
+  if (error) throw actionError(error, 'تعذر إرسال السعر إلى الإدارة. راجع حالة المهمة وحاول مجددًا.')
   return data
 }
 
@@ -1239,16 +1239,4 @@ export async function subscribeToBookingTracking(bookingId: string, onChange: ()
   if (!supabase) return () => undefined
   const channel = supabase.channel(`booking-tracking:${bookingId}:${crypto.randomUUID()}`).on('postgres_changes', { event: '*', schema: 'public', table: 'booking_tracking_locations', filter: `booking_id=eq.${bookingId}` }, () => onChange()).subscribe()
   return () => { void supabase?.removeChannel(channel) }
-}
-
-export type BookingCallParticipant = { user_id: string; display_name: string; participant_role: 'customer' | 'provider' | 'admin' }
-
-export async function getBookingCallParticipants(bookingId: string) {
-  if (!supabase) return { data: null, error: new Error('الاتصال المباشر غير متاح في وضع المعاينة.') }
-  return await supabase.rpc('get_booking_call_participants', { p_booking_id: bookingId }) as { data: BookingCallParticipant[] | null; error: any }
-}
-
-export async function getActiveAdminCallParticipants() {
-  if (!supabase) return { data: [], error: new Error('الاتصال المباشر غير متاح في وضع المعاينة.') }
-  return await supabase.rpc('get_active_admin_call_participants') as { data: BookingCallParticipant[] | null; error: any }
 }
