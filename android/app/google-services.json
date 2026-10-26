@@ -15,16 +15,12 @@
       },
       "oauth_client": [
         {
-          "client_id": "608379006778-s0rfnamp7mbsplom77lje45ajc9i6rfo.apps.googleusercontent.com",
+          "client_id": "608379006778-cpji1mg57923kcpr357mpeo27cqs6f3n.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.home.service",
-            "certificate_hash": "71fe84bf7c112c8a8ed0e40ae16f38aa67fff297"
+            "certificate_hash": "e2f701eb0995ff6b12795f4f859c975b83bcbbbe"
           }
-        },
-        {
-          "client_id": "608379006778-ucli23t7tlku02tvs4ei4pr8k2m5gj4b.apps.googleusercontent.com",
-          "client_type": 3
         }
       ],
       "api_key": [

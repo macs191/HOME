@@ -57,8 +57,15 @@ function restoreBookingDraft(raw: string, serviceFallback?: string): BookingDraf
 }
 
 function App() {
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => { try { return (localStorage.getItem('homefix-theme-v2') as 'light' | 'dark' | null) ?? 'light' } catch { return 'light' } })
-  useEffect(() => { document.documentElement.dataset.theme = theme; try { localStorage.setItem('homefix-theme-v2', theme) } catch { /* التخزين قد يكون معطلًا في التصفح الخاص */ } }, [theme])
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+    const applySystemTheme = () => setTheme(media?.matches ? 'dark' : 'light')
+    applySystemTheme()
+    media?.addEventListener?.('change', applySystemTheme)
+    return () => media?.removeEventListener?.('change', applySystemTheme)
+  }, [])
+  useEffect(() => { document.documentElement.dataset.theme = theme }, [theme])
   useEffect(() => {
     let cleanup: (() => void) | undefined
     void initialiseAndroidApp().then(async (remove) => { cleanup = remove; const auth = await getAuthState(); if (auth.user) await requestAndroidNotifications() }).catch(() => undefined)

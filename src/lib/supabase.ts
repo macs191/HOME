@@ -261,6 +261,7 @@ function authMessage(error: { message?: string }) {
   if (message.includes('email not confirmed')) return 'لم يكتمل تفعيل البريد الإلكتروني. تحقق من بريدك ثم حاول مجددًا.'
   if (message.includes('redirect_uri_mismatch') || message.includes('redirect uri mismatch')) return 'إعداد Google غير مكتمل: أضف رابط Supabase التالي حرفيًا في Authorized redirect URIs داخل Google Cloud: https://ojivulfurjjsskqzghfb.supabase.co/auth/v1/callback، ثم أضف رابط موقع التطبيق /auth/callback في Supabase Auth > URL Configuration.'
   if (message.includes('provider is not enabled') || message.includes('unsupported provider')) return 'الدخول بحساب Google غير متاح الآن. استخدم البريد الإلكتروني أو حاول لاحقًا.'
+  if (message.includes('account reauth failed') || message.includes('unregistered_on_api_console') || message.includes('28444') || message.includes('developer console is not set up correctly')) return 'إعداد Google لتطبيق Android غير مكتمل. سنفتح طريقة Google الآمنة عبر المتصفح بدلًا من ذلك.'
   if (message.includes('developer_error') || message.includes('provider configuration') || message.includes('provider_configuration_error') || message.includes('10:') || message === '10' || message.includes('12500')) return 'إعداد Google للتطبيق غير متطابق مع حزمة Android الحالية. احذف النسخة القديمة وثبّت آخر APK الموقّع، ثم جرّب مجددًا.'
   if (message.includes('invalid jwt') || message.includes('invalid claim') || message.includes('invalid audience') || message.includes('audience')) return 'وصل رمز Google، لكن Supabase رفضه. يلزم مطابقة Web Client ID في إعداد Google داخل Supabase مع التطبيق.'
   if (message.includes('no credential') || message.includes('no google account')) return 'لم يجد الهاتف حساب Google متاحًا. أضف الحساب إلى الهاتف ثم حاول مجددًا.'
@@ -281,12 +282,17 @@ export async function getAuthState(): Promise<AuthState> {
 
 export async function getMyRole(): Promise<Role | null> {
   if (!supabase) return null
-  const { data: sessionData } = await supabase.auth.getSession()
-  const userId = sessionData.session?.user.id
-  if (!userId) return null
-  const { data, error } = await supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle()
-  if (error) throw new Error(error.message || 'تعذر التحقق من صلاحيات الحساب.')
-  return (data?.role as Role | undefined) ?? null
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const userId = sessionData.session?.user.id
+    if (userId) {
+      const { data, error } = await supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle()
+      if (error) throw new Error(error.message || 'تعذر التحقق من صلاحيات الحساب.')
+      if (data?.role) return data.role as Role
+    }
+    if (attempt < 3) await new Promise((resolve) => window.setTimeout(resolve, 150 * (attempt + 1)))
+  }
+  return null
 }
 
 export async function getMyAccountProfile() {
@@ -443,6 +449,15 @@ export async function signInWithGoogle(role: Extract<Role, 'customer' | 'provide
       if (error) throw error
       return { flow: 'native' as const }
     } catch (error) {
+      const nativeMessage = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+      if (nativeMessage.includes('account reauth failed') || nativeMessage.includes('unregistered_on_api_console') || nativeMessage.includes('28444') || nativeMessage.includes('developer console is not set up correctly') || nativeMessage.includes('sign_in_canceled')) {
+        const callback = new URL('com.home.service://auth/callback')
+        if (nextPath?.startsWith('/') && !nextPath.startsWith('//')) callback.searchParams.set('next', nextPath)
+        const { data, error: oauthError } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: callback.toString(), skipBrowserRedirect: true } })
+        if (oauthError || !data.url) throw new Error(authMessage(oauthError ?? { message: 'تعذر بدء دخول Google عبر المتصفح.' }))
+        await Browser.open({ url: data.url })
+        return { flow: 'redirect' as const }
+      }
       throw new Error(authMessage(error as { message?: string }))
     }
   }

@@ -38,14 +38,15 @@ Deno.serve(async (req) => {
   let sent = 0
   const invalidIds: string[] = []
   for (const device of devices) {
+    const isCall = record.notification_type === 'voice_call'
     const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/messages:send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
       body: JSON.stringify({ message: {
         token: device.token,
-        notification: { title: record.title, body: record.body },
-        data: { notification_id: record.id, notification_type: record.notification_type || 'general', target_path: record.target_path || '/customer/notifications' },
-        android: { priority: 'high', notification: { channel_id: 'home-service-incoming-v2', sound: 'home_ring', default_sound: false, default_vibrate_timings: false } },
+        ...(isCall ? {} : { notification: { title: record.title, body: record.body } }),
+        data: { notification_id: record.id, notification_type: record.notification_type || 'general', title: record.title, body: record.body, target_path: record.target_path || '/customer/notifications' },
+        android: { priority: 'high', ...(isCall ? {} : { notification: { channel_id: 'home-service-incoming-v2', sound: 'home_ring', default_sound: false, default_vibrate_timings: false } }) },
       } }),
     })
     if (response.ok) sent += 1
