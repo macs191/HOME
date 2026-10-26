@@ -257,7 +257,7 @@ export async function subscribeToAdminChanges(onChange: (table: 'bookings' | 'pr
 
 function authMessage(error: { message?: string }) {
   const message = error.message?.toLowerCase() ?? ''
-  if (message.includes('invalid login credentials')) return 'البريد الإلكتروني أو كلمة المرور غير صحيحة.'
+  if (message.includes('invalid login credentials') || message.includes('user not found') || message.includes('email not found')) return 'الحساب غير موجود أو أن البريد الإلكتروني أو كلمة المرور غير صحيحة.'
   if (message.includes('email not confirmed')) return 'لم يكتمل تفعيل البريد الإلكتروني. تحقق من بريدك ثم حاول مجددًا.'
   if (message.includes('redirect_uri_mismatch') || message.includes('redirect uri mismatch')) return 'إعداد Google غير مكتمل: أضف رابط Supabase التالي حرفيًا في Authorized redirect URIs داخل Google Cloud: https://ojivulfurjjsskqzghfb.supabase.co/auth/v1/callback، ثم أضف رابط موقع التطبيق /auth/callback في Supabase Auth > URL Configuration.'
   if (message.includes('provider is not enabled') || message.includes('unsupported provider')) return 'الدخول بحساب Google غير متاح الآن. استخدم البريد الإلكتروني أو حاول لاحقًا.'
@@ -281,12 +281,20 @@ export async function getAuthState(): Promise<AuthState> {
 
 export async function getMyRole(): Promise<Role | null> {
   if (!supabase) return null
-  const { data: sessionData } = await supabase.auth.getSession()
-  const userId = sessionData.session?.user.id
-  if (!userId) return null
-  const { data, error } = await supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle()
-  if (error) throw new Error(error.message || 'تعذر التحقق من صلاحيات الحساب.')
-  return (data?.role as Role | undefined) ?? null
+  // Native Android can finish sign-in before the persisted session is
+  // observable by the next read. Retry briefly so a valid account is not
+  // incorrectly sent to the profile-completion screen as "not found".
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const userId = sessionData.session?.user.id
+    if (userId) {
+      const { data, error } = await supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle()
+      if (error) throw new Error(error.message || 'تعذر التحقق من صلاحيات الحساب.')
+      if (data?.role) return data.role as Role
+    }
+    if (attempt < 3) await new Promise((resolve) => window.setTimeout(resolve, 150 * (attempt + 1)))
+  }
+  return null
 }
 
 export async function getMyAccountProfile() {
